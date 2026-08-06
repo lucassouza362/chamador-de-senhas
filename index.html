@@ -1,0 +1,517 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Chamador de Senhas</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wght@400..900&family=JetBrains+Mono:wght@500;700;800&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+<style>
+  :root{
+    --bg:#0b1220; --panel:#111b2e; --line:#22304a;
+    --ink:#eaf2ff; --dim:#8fa3c4;
+    --prior:#ffb020; --comum:#37d67a; --alert:#ff5d5d;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{height:100%}
+  body{background:var(--bg);color:var(--ink);font-family:'Archivo',system-ui,sans-serif;overflow-x:hidden}
+  .tela{display:none;min-height:100vh;flex-direction:column;align-items:center;gap:16px;padding:24px}
+  .tela.ativa{display:flex}
+  h1{font-size:20px;letter-spacing:.15em;text-transform:uppercase;color:var(--dim);font-weight:800;text-align:center}
+  .cartao{
+    background:var(--panel);border:2px solid var(--line);border-radius:18px;
+    padding:18px;display:flex;flex-wrap:wrap;gap:12px;align-items:center;justify-content:center;
+    max-width:820px;width:100%;
+  }
+  .cartao h3{width:100%;text-align:center;font-size:12px;letter-spacing:.25em;text-transform:uppercase;color:var(--dim)}
+  .btn{
+    font-family:inherit;font-weight:800;font-size:16px;border:none;border-radius:12px;
+    padding:16px 22px;cursor:pointer;color:var(--ink);background:#1a2743;
+    transition:transform .08s,filter .15s;
+  }
+  .btn:hover{filter:brightness(1.2)} .btn:active{transform:scale(.96)}
+  .btn:focus-visible{outline:3px solid #6ea8ff;outline-offset:2px}
+  .btn:disabled{opacity:.4;cursor:not-allowed}
+  .btn.enorme{font-size:22px;padding:24px 30px;width:100%;max-width:420px}
+  .btn.p{background:var(--prior);color:#1a1a1a}
+  .btn.c{background:var(--comum);color:#062b16}
+  .btn.fantasma{background:transparent;border:2px solid var(--line);color:var(--dim)}
+  .btn.play{background:var(--comum);color:#062b16}
+  .btn.stop{background:var(--alert);color:#fff}
+  .fila-info{
+    font-family:'JetBrains Mono',monospace;font-weight:700;font-size:16px;
+    color:var(--dim);background:#0d1626;border-radius:10px;padding:12px 18px;
+  }
+  .fila-info b{color:var(--ink)}
+  select,input[type=number]{
+    font-family:inherit;font-weight:700;font-size:16px;color:var(--ink);
+    background:#0d1626;border:2px solid var(--line);border-radius:10px;padding:12px 14px;
+  }
+  input[type=number]{width:90px;text-align:center}
+  label.mini{font-size:12px;color:var(--dim);font-weight:700;letter-spacing:.05em;text-transform:uppercase}
+  .aviso{font-size:12px;color:var(--dim);width:100%;text-align:center}
+  .voltar{position:fixed;top:12px;left:12px;z-index:20}
+  .status-sync{
+    position:fixed;top:14px;right:14px;display:flex;gap:8px;align-items:center;
+    font-size:12px;font-weight:700;color:var(--dim);z-index:20;
+  }
+  .status-sync .dot{width:10px;height:10px;border-radius:50%;background:var(--alert)}
+  .status-sync.ok .dot{background:var(--comum)}
+  #telaInicio .btn.enorme{display:flex;flex-direction:column;gap:6px;align-items:center}
+  #telaInicio .btn.enorme small{font-weight:600;font-size:13px;opacity:.75}
+  #ultChamada{
+    background:var(--panel);border:2px solid var(--line);border-radius:18px;
+    padding:14px 36px;text-align:center;min-width:300px;
+  }
+  #ultChamada .rotulo{font-size:11px;letter-spacing:.3em;text-transform:uppercase;color:var(--dim);font-weight:700}
+  #ultCod{font-family:'JetBrains Mono',monospace;font-weight:800;font-size:52px;line-height:1.15}
+  #ultCod.prior{color:var(--prior)} #ultCod.comum{color:var(--comum)}
+  #ultGuiche{color:var(--dim);font-weight:600}
+  #ultGuiche b{color:var(--ink)}
+  #telaPainel{padding:0;gap:0}
+  #painelConteudo{flex:1;width:100%;display:flex;flex-direction:column;min-height:0}
+  #telaChamada{flex:1;display:flex;background:var(--bg);min-height:0}
+  #principal{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2vh;position:relative;padding:2vh 2vw}
+  #tipoChamada{font-weight:800;letter-spacing:.35em;text-transform:uppercase;font-size:clamp(16px,3.2vh,44px);color:var(--dim);padding:.4em 1.2em;border:2px solid var(--line);border-radius:999px;transition:all .3s}
+  #tipoChamada.prior{color:#1a1a1a;background:var(--prior);border-color:var(--prior)}
+  #tipoChamada.comum{color:#062b16;background:var(--comum);border-color:var(--comum)}
+  #senhaAtual{font-family:'JetBrains Mono',monospace;font-weight:800;font-size:clamp(80px,32vh,360px);line-height:1;letter-spacing:.04em}
+  #senhaAtual.prior{color:var(--prior);text-shadow:0 0 70px rgba(255,176,32,.35)}
+  #senhaAtual.comum{color:var(--comum);text-shadow:0 0 70px rgba(55,214,122,.3)}
+  #guicheLinha{font-size:clamp(20px,5.5vh,70px);font-weight:600;color:var(--dim)}
+  #guicheLinha b{color:var(--ink);font-weight:800}
+  @keyframes piscar{0%,100%{opacity:1}25%,75%{opacity:.15}50%{opacity:1}}
+  .piscando{animation:piscar 1.2s ease 2}
+  @media (prefers-reduced-motion:reduce){.piscando{animation:none}}
+  #historico{width:min(24vw,340px);background:var(--panel);border-left:2px solid var(--line);display:flex;flex-direction:column;padding:2vh 1.2vw;gap:1vh}
+  #historico h2{font-size:clamp(11px,1.9vh,20px);letter-spacing:.3em;text-transform:uppercase;color:var(--dim);font-weight:700;margin-bottom:.5vh}
+  .hist-item{display:flex;justify-content:space-between;align-items:baseline;font-family:'JetBrains Mono',monospace;font-weight:700;font-size:clamp(16px,3.6vh,44px);padding:.35em .5em;border-radius:10px;background:#0d1626}
+  .hist-item .g{font-size:.55em;color:var(--dim);font-family:'Archivo',sans-serif;font-weight:600}
+  .hist-item.prior{color:var(--prior)}.hist-item.comum{color:var(--comum)}
+  #vazio{color:var(--dim);font-size:clamp(12px,2vh,20px)}
+  #relogio{position:absolute;top:1.5vh;right:1.5vw;font-family:'JetBrains Mono',monospace;font-weight:700;font-size:clamp(14px,3.2vh,36px);color:var(--dim)}
+  #telaSlides{display:none;flex:1;align-items:center;justify-content:center;background:#000;position:relative;min-height:0}
+  #slideImg{max-width:100%;max-height:100%;object-fit:contain}
+  #faixaSenha{
+    display:none;position:absolute;bottom:0;left:0;right:0;
+    background:rgba(11,18,32,.92);border-top:2px solid var(--line);
+    padding:1.2vh 2vw;justify-content:center;align-items:baseline;gap:1.2em;
+    font-family:'JetBrains Mono',monospace;font-weight:800;font-size:clamp(18px,4.5vh,56px);
+  }
+  #faixaSenha .rot{font-family:'Archivo',sans-serif;font-weight:700;font-size:.45em;letter-spacing:.25em;text-transform:uppercase;color:var(--dim)}
+  #faixaCod.prior{color:var(--prior)} #faixaCod.comum{color:var(--comum)}
+  #faixaSenha .g{font-family:'Archivo',sans-serif;font-weight:700;font-size:.6em;color:var(--ink)}
+  #barraPainel{
+    background:var(--panel);border-top:2px solid var(--line);
+    padding:10px 14px;display:flex;flex-wrap:wrap;gap:10px;align-items:center;justify-content:center;
+  }
+  #barraPainel.oculta{display:none}
+  #ativarPainel{
+    position:absolute;inset:0;background:rgba(11,18,32,.96);z-index:10;
+    display:flex;flex-direction:column;align-items:center;justify-content:center;gap:16px;
+  }
+  #inputSlides{display:none}
+  #infoSlides{font-weight:700;color:var(--dim);font-size:14px}
+  #infoSlides b{color:var(--ink)}
+</style>
+</head>
+<body>
+
+<div class="status-sync" id="statusSync" style="display:none"><div class="dot"></div><span id="statusSyncTxt">conectando…</span></div>
+
+<!-- ============ INÍCIO ============ -->
+<div class="tela ativa" id="telaInicio">
+  <h1>Chamador de Senhas</h1>
+  <button class="btn enorme" onclick="irPara('atendente')">🧑‍💼 Sou atendente<small>Chamar a próxima senha do meu guichê</small></button>
+  <button class="btn enorme" onclick="irPara('painel')">🖥️ Painel do projetor<small>Tela grande com senha, voz e slides</small></button>
+  <button class="btn enorme fantasma" onclick="irPara('admin')">⚙️ Administração<small>Emitir senhas e zerar o dia</small></button>
+</div>
+
+<!-- ============ ATENDENTE ============ -->
+<div class="tela" id="telaAtendente">
+  <button class="btn fantasma voltar" onclick="irPara('inicio')">← Início</button>
+  <h1>Atendente</h1>
+  <div class="cartao">
+    <label class="mini">Meu guichê</label>
+    <input type="number" id="meuGuiche" min="1" max="99" value="1">
+  </div>
+  <div id="ultChamada">
+    <div class="rotulo">Última senha chamada</div>
+    <div id="ultCod">— — —</div>
+    <div id="ultGuiche">Guichê <b id="ultG">-</b></div>
+  </div>
+  <div class="cartao">
+    <button class="btn enorme p" id="btnChP" onclick="chamarProxima('P')">📢 Chamar próxima Prioridade</button>
+    <button class="btn enorme c" id="btnChC" onclick="chamarProxima('C')">📢 Chamar próxima Comum</button>
+    <button class="btn enorme" onclick="repetirMinha()">🔁 Repetir minha última</button>
+  </div>
+  <span class="fila-info">Aguardando — Prioridade: <b id="filaPA">0</b> · Comum: <b id="filaCA">0</b></span>
+</div>
+
+<!-- ============ ADMIN ============ -->
+<div class="tela" id="telaAdmin">
+  <button class="btn fantasma voltar" onclick="irPara('inicio')">← Início</button>
+  <h1>Administração</h1>
+  <div class="cartao">
+    <h3>Emissão de senhas (recepção)</h3>
+    <button class="btn p" onclick="emitir('P')">+ Emitir Prioridade</button>
+    <button class="btn c" onclick="emitir('C')">+ Emitir Comum</button>
+    <span class="fila-info">Fila P: <b id="filaPAd">0</b> · Fila C: <b id="filaCAd">0</b></span>
+    <span class="aviso">Última emitida — P: <b id="emitPAd">000</b> · C: <b id="emitCAd">000</b></span>
+  </div>
+  <div class="cartao">
+    <h3>Manutenção</h3>
+    <button class="btn stop" onclick="zerar()">Zerar dia (senhas e histórico)</button>
+  </div>
+</div>
+
+<!-- ============ PAINEL ============ -->
+<div class="tela" id="telaPainel">
+  <div id="painelConteudo">
+    <div id="ativarPainel">
+      <h1>Painel do projetor</h1>
+      <button class="btn enorme play" onclick="ativarPainel()">▶ Ativar painel e som</button>
+      <span class="aviso">Este clique é necessário para o navegador liberar o áudio da chamada.</span>
+    </div>
+    <div id="telaChamada">
+      <div id="principal">
+        <div id="relogio">--:--</div>
+        <div id="tipoChamada">Aguardando chamada</div>
+        <div id="senhaAtual">— — —</div>
+        <div id="guicheLinha">Guichê <b id="guicheNum">-</b></div>
+      </div>
+      <aside id="historico">
+        <h2>Últimas chamadas</h2>
+        <div id="listaHist"><div id="vazio">Nenhuma senha chamada ainda.</div></div>
+      </aside>
+    </div>
+    <div id="telaSlides">
+      <img id="slideImg" alt="Slide">
+      <div id="faixaSenha"><span class="rot">Última senha</span><span id="faixaCod">—</span><span class="g">Guichê <span id="faixaG">-</span></span></div>
+    </div>
+  </div>
+  <div id="barraPainel">
+    <button class="btn fantasma" onclick="irPara('inicio')">← Início</button>
+    <button class="btn fantasma" onclick="document.getElementById('inputSlides').click()">📂 Slides (PDF/imagens)</button>
+    <input type="file" id="inputSlides" accept="application/pdf,image/*" multiple onchange="carregarSlides(this.files)">
+    <span id="infoSlides">Nenhum slide</span>
+    <label class="mini">Seg./slide</label><input type="number" id="segSlide" min="2" max="120" value="8">
+    <label class="mini">Seg. senha</label><input type="number" id="segChamada" min="3" max="60" value="12">
+    <button class="btn play" id="btnPlay" onclick="alternarApresentacao()" disabled>▶ Slides</button>
+    <label class="mini">Voz</label><select id="voz"></select>
+    <button class="btn fantasma" onclick="telaCheia()">⛶ Tela cheia (F)</button>
+    <button class="btn fantasma" onclick="alternarBarra()">▼ Ocultar barra (H)</button>
+  </div>
+</div>
+
+<script>
+if(window.pdfjsLib){
+  pdfjsLib.GlobalWorkerOptions.workerSrc =
+    'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+}
+
+/* ============ API ============ */
+const API = '/api/estado';
+let cache = { emitP:0, emitC:0, chamP:0, chamC:0, hist:[], ultima:null };
+let ultimoTs = 0;
+let minhaUltima = null;
+const $ = id => document.getElementById(id);
+
+async function lerEstado(){
+  try{
+    const r = await fetch(API, {cache:'no-store'});
+    if(!r.ok) throw new Error('HTTP '+r.status);
+    cache = await r.json();
+    marcarSync(true);
+    return cache;
+  }catch(e){ marcarSync(false); return cache; }
+}
+async function acao(payload){
+  try{
+    const r = await fetch(API, {
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify(payload)
+    });
+    const dados = await r.json();
+    if(!r.ok){ marcarSync(true); return {ok:false, erro:dados.erro||('HTTP '+r.status)}; }
+    marcarSync(true);
+    if(dados.estado) cache = dados.estado;
+    return {ok:true, ...dados};
+  }catch(e){ marcarSync(false); return {ok:false, erro:'sem conexão'}; }
+}
+function marcarSync(ok){
+  const s=$('statusSync');
+  s.classList.toggle('ok',ok);
+  $('statusSyncTxt').textContent = ok?'sincronizado':'sem conexão';
+}
+
+/* ============ NAVEGAÇÃO ============ */
+let modo='inicio';
+let pollTimer=null;
+function irPara(novoModo){
+  modo=novoModo;
+  document.querySelectorAll('.tela').forEach(t=>t.classList.remove('ativa'));
+  const mapa={inicio:'telaInicio',atendente:'telaAtendente',admin:'telaAdmin',painel:'telaPainel'};
+  $(mapa[novoModo]).classList.add('ativa');
+  $('statusSync').style.display = novoModo==='inicio'?'none':'flex';
+  clearInterval(pollTimer);
+  if(novoModo==='atendente'){ atualizarAtendente(); pollTimer=setInterval(atualizarAtendente,4000); }
+  if(novoModo==='admin'){ atualizarAdmin(); pollTimer=setInterval(atualizarAdmin,4000); }
+  if(novoModo==='painel' && painelAtivo){ pollTimer=setInterval(pollPainel,2000); }
+}
+
+/* ============ ATENDENTE ============ */
+async function chamarProxima(tipo){
+  $('btnChP').disabled = $('btnChC').disabled = true;
+  const r = await acao({action:'chamar', tipo, guiche: parseInt($('meuGuiche').value)||1});
+  if(r.ok){
+    minhaUltima = r.chamada;
+    mostrarUltAtendente(r.chamada);
+    atualizarFilasAtendente(cache);
+  } else {
+    alert('Não consegui registrar a chamada ('+r.erro+'). Tente de novo.');
+  }
+  $('btnChP').disabled = $('btnChC').disabled = false;
+}
+async function repetirMinha(){
+  if(!minhaUltima){ alert('Você ainda não chamou nenhuma senha nesta sessão.'); return; }
+  const r = await acao({action:'repetir', chamada: minhaUltima});
+  if(r.ok) mostrarUltAtendente(r.chamada);
+}
+async function atualizarAtendente(){
+  const e = await lerEstado();
+  if(e.ultima) mostrarUltAtendente(e.ultima);
+  atualizarFilasAtendente(e);
+}
+function mostrarUltAtendente(ch){
+  $('ultCod').textContent = ch.tipo+String(ch.num).padStart(3,'0');
+  $('ultCod').className = ch.tipo==='P'?'prior':'comum';
+  $('ultG').textContent = ch.guiche;
+}
+function atualizarFilasAtendente(e){
+  $('filaPA').textContent = Math.max(0,e.emitP-e.chamP);
+  $('filaCA').textContent = Math.max(0,e.emitC-e.chamC);
+}
+
+/* ============ ADMIN ============ */
+async function emitir(tipo){
+  await acao({action:'emitir', tipo});
+  atualizarAdmin();
+}
+async function atualizarAdmin(){
+  const e = await lerEstado();
+  $('filaPAd').textContent = Math.max(0,e.emitP-e.chamP);
+  $('filaCAd').textContent = Math.max(0,e.emitC-e.chamC);
+  $('emitPAd').textContent = String(e.emitP).padStart(3,'0');
+  $('emitCAd').textContent = String(e.emitC).padStart(3,'0');
+}
+async function zerar(){
+  if(!confirm('Zerar TODAS as senhas e o histórico para todos os guichês?')) return;
+  // Se o servidor tiver SENHA_ADMIN configurada, pede o PIN
+  const pin = prompt('PIN de administração (deixe em branco se não houver):') || undefined;
+  const r = await acao({action:'zerar', pin});
+  if(!r.ok){ alert('Não foi possível zerar: '+r.erro); return; }
+  ultimoTs = 0; minhaUltima = null;
+  atualizarAdmin();
+}
+
+/* ============ PAINEL ============ */
+let painelAtivo=false;
+const show = { slides:[], idx:0, rodando:false, timerSlide:null, timerVolta:null };
+
+setInterval(()=>{
+  const r=$('relogio');
+  if(r) r.textContent = new Date().toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'});
+},1000);
+
+function ativarPainel(){
+  painelAtivo=true;
+  $('ativarPainel').style.display='none';
+  audioCtx = audioCtx || new (window.AudioContext||window.webkitAudioContext)();
+  lerEstado().then(e=>{
+    if(e.ultima){ ultimoTs = e.ultima.ts||0; desenharChamada(e.ultima,false); }
+  });
+  clearInterval(pollTimer);
+  pollTimer=setInterval(pollPainel,2000);
+}
+async function pollPainel(){
+  if(modo!=='painel'||!painelAtivo) return;
+  const e = await lerEstado();
+  if(e.ultima && (e.ultima.ts||0) > ultimoTs){
+    ultimoTs = e.ultima.ts;
+    anunciarNoPainel(e.ultima);
+  } else if(!e.ultima && ultimoTs>0){
+    ultimoTs=0;
+    $('senhaAtual').textContent='— — —'; $('senhaAtual').className='';
+    $('tipoChamada').textContent='Aguardando chamada'; $('tipoChamada').className='';
+    $('listaHist').innerHTML='<div id="vazio">Nenhuma senha chamada ainda.</div>';
+    $('faixaSenha').style.display='none';
+  }
+}
+function anunciarNoPainel(ch){
+  interromperSlides();
+  desenharChamada(ch,true);
+  campainha();
+  falar(`Senha ${ch.tipo==='P'?'pê':'cê'}, ${soletrar(ch.num)}. Guichê ${ch.guiche}.`);
+}
+function desenharChamada(ch,animar){
+  const cod = ch.tipo+String(ch.num).padStart(3,'0');
+  const el = $('senhaAtual');
+  el.textContent = cod;
+  el.className = ch.tipo==='P'?'prior':'comum';
+  if(animar){ el.classList.remove('piscando'); void el.offsetWidth; el.classList.add('piscando'); }
+  const tag = $('tipoChamada');
+  tag.textContent = ch.tipo==='P'?'Atendimento prioritário':'Atendimento comum';
+  tag.className = ch.tipo==='P'?'prior':'comum';
+  $('guicheNum').textContent = ch.guiche;
+  const l=$('listaHist'); l.innerHTML='';
+  (cache.hist||[]).forEach(h=>{
+    const d=document.createElement('div');
+    d.className='hist-item '+(h.tipo==='P'?'prior':'comum');
+    d.innerHTML = h.tipo+String(h.num).padStart(3,'0')+' <span class="g">G'+h.guiche+'</span>';
+    l.appendChild(d);
+  });
+}
+
+/* --- slides (locais, só no computador do painel) --- */
+async function carregarSlides(files){
+  if(!files||!files.length) return;
+  $('infoSlides').textContent='Processando…';
+  const novos=[];
+  for(const f of files){
+    try{
+      if(f.type==='application/pdf'){
+        const buf=await f.arrayBuffer();
+        const pdf=await pdfjsLib.getDocument({data:buf}).promise;
+        for(let p=1;p<=pdf.numPages;p++){
+          const page=await pdf.getPage(p);
+          let vp=page.getViewport({scale:1});
+          const esc=Math.min(2.5,1920/vp.width);
+          vp=page.getViewport({scale:esc});
+          const cv=document.createElement('canvas');
+          cv.width=vp.width; cv.height=vp.height;
+          await page.render({canvasContext:cv.getContext('2d'),viewport:vp}).promise;
+          novos.push(cv.toDataURL('image/jpeg',0.9));
+        }
+      } else if(f.type.startsWith('image/')){
+        novos.push(await new Promise((res,rej)=>{
+          const r=new FileReader();
+          r.onload=()=>res(r.result); r.onerror=()=>rej(new Error('leitura'));
+          r.readAsDataURL(f);
+        }));
+      }
+    }catch(err){
+      console.error(err);
+      alert('Não consegui ler "'+f.name+'". Verifique se é PDF ou imagem válida.');
+    }
+  }
+  show.slides=show.slides.concat(novos);
+  const n=show.slides.length;
+  $('infoSlides').innerHTML = n?'<b>'+n+'</b> slide'+(n>1?'s':''):'Nenhum slide';
+  $('btnPlay').disabled=!n;
+  $('inputSlides').value='';
+}
+function alternarApresentacao(){ show.rodando?pararApresentacao():iniciarApresentacao(); }
+function iniciarApresentacao(){
+  if(!show.slides.length) return;
+  show.rodando=true;
+  $('btnPlay').textContent='⏸ Parar';
+  $('btnPlay').classList.replace('play','stop');
+  mostrarSlideAtual(); agendarTrocaSlide();
+}
+function pararApresentacao(){
+  show.rodando=false;
+  clearInterval(show.timerSlide); clearTimeout(show.timerVolta);
+  $('btnPlay').textContent='▶ Slides';
+  $('btnPlay').classList.replace('stop','play');
+  $('telaSlides').style.display='none';
+  $('telaChamada').style.display='flex';
+}
+function agendarTrocaSlide(){
+  clearInterval(show.timerSlide);
+  const seg=Math.max(2,parseInt($('segSlide').value)||8);
+  show.timerSlide=setInterval(()=>{
+    show.idx=(show.idx+1)%show.slides.length;
+    mostrarSlideAtual();
+  },seg*1000);
+}
+function mostrarSlideAtual(){
+  if(!show.rodando) return;
+  $('telaChamada').style.display='none';
+  $('telaSlides').style.display='flex';
+  $('slideImg').src=show.slides[show.idx];
+  const u=cache.ultima;
+  const faixa=$('faixaSenha');
+  if(u){
+    faixa.style.display='flex';
+    const fc=$('faixaCod');
+    fc.textContent=u.tipo+String(u.num).padStart(3,'0');
+    fc.className=u.tipo==='P'?'prior':'comum';
+    $('faixaG').textContent=u.guiche;
+  } else faixa.style.display='none';
+}
+function interromperSlides(){
+  clearTimeout(show.timerVolta);
+  $('telaSlides').style.display='none';
+  $('telaChamada').style.display='flex';
+  if(show.rodando){
+    clearInterval(show.timerSlide);
+    const seg=Math.max(3,parseInt($('segChamada').value)||12);
+    show.timerVolta=setTimeout(()=>{ mostrarSlideAtual(); agendarTrocaSlide(); },seg*1000);
+  }
+}
+function telaCheia(){
+  if(!document.fullscreenElement) document.documentElement.requestFullscreen();
+  else document.exitFullscreen();
+}
+function alternarBarra(){ $('barraPainel').classList.toggle('oculta'); }
+document.addEventListener('keydown',e=>{
+  if(modo!=='painel') return;
+  if(e.target.tagName==='INPUT'||e.target.tagName==='SELECT') return;
+  const k=e.key.toLowerCase();
+  if(k==='f') telaCheia();
+  if(k==='h') alternarBarra();
+});
+
+/* ============ SOM / VOZ ============ */
+let vozes=[], audioCtx;
+function carregarVozes(){
+  vozes=speechSynthesis.getVoices();
+  const sel=$('voz'); if(!sel) return;
+  sel.innerHTML='';
+  const pt=vozes.filter(v=>v.lang.toLowerCase().startsWith('pt'));
+  (pt.length?pt:vozes).forEach(v=>{
+    const o=document.createElement('option');
+    o.value=v.name; o.textContent=v.name.replace(/Microsoft |Google /,'')+' ('+v.lang+')';
+    sel.appendChild(o);
+  });
+}
+speechSynthesis.onvoiceschanged=carregarVozes;
+carregarVozes();
+function campainha(){
+  audioCtx=audioCtx||new (window.AudioContext||window.webkitAudioContext)();
+  const t=audioCtx.currentTime;
+  [[880,0],[660,0.28]].forEach(([f,dt])=>{
+    const o=audioCtx.createOscillator(), g=audioCtx.createGain();
+    o.type='sine'; o.frequency.value=f;
+    g.gain.setValueAtTime(0.0001,t+dt);
+    g.gain.exponentialRampToValueAtTime(0.5,t+dt+0.02);
+    g.gain.exponentialRampToValueAtTime(0.0001,t+dt+0.6);
+    o.connect(g); g.connect(audioCtx.destination);
+    o.start(t+dt); o.stop(t+dt+0.65);
+  });
+}
+function falar(texto){
+  speechSynthesis.cancel();
+  const u=new SpeechSynthesisUtterance(texto);
+  u.lang='pt-BR'; u.rate=0.92;
+  const v=vozes.find(x=>x.name===$('voz').value);
+  if(v) u.voice=v;
+  setTimeout(()=>speechSynthesis.speak(u),900);
+}
+const soletrar = n => String(n).padStart(3,'0').split('').join(', ');
+</script>
+</body>
+</html>
