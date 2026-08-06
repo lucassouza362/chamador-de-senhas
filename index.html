@@ -199,6 +199,13 @@
     <label class="mini">Seg./slide</label><input type="number" id="segSlide" min="2" max="120" value="8">
     <label class="mini">Seg. senha</label><input type="number" id="segChamada" min="3" max="60" value="12">
     <button class="btn play" id="btnPlay" onclick="alternarApresentacao()" disabled>▶ Slides</button>
+    <label class="mini">Som</label>
+    <select id="somSel">
+      <option value="alerta" selected>Alerta (3 tons)</option>
+      <option value="gongo">Gongo forte</option>
+      <option value="suave">Suave (original)</option>
+    </select>
+    <button class="btn fantasma" onclick="campainha()">🔊 Testar</button>
     <label class="mini">Voz</label><select id="voz"></select>
     <button class="btn fantasma" onclick="telaCheia()">⛶ Tela cheia (F)</button>
     <button class="btn fantasma" onclick="alternarBarra()">▼ Ocultar barra (H)</button>
@@ -490,18 +497,42 @@ function carregarVozes(){
 }
 speechSynthesis.onvoiceschanged=carregarVozes;
 carregarVozes();
+function tocarNota(f,dt,dur,vol,tipo){
+  const t=audioCtx.currentTime;
+  const o=audioCtx.createOscillator(), g=audioCtx.createGain();
+  o.type=tipo||'sine'; o.frequency.value=f;
+  g.gain.setValueAtTime(0.0001,t+dt);
+  g.gain.exponentialRampToValueAtTime(vol,t+dt+0.015);
+  g.gain.exponentialRampToValueAtTime(0.0001,t+dt+dur);
+  o.connect(g); g.connect(audioCtx.destination);
+  o.start(t+dt); o.stop(t+dt+dur+0.05);
+}
 function campainha(){
   audioCtx=audioCtx||new (window.AudioContext||window.webkitAudioContext)();
-  const t=audioCtx.currentTime;
-  [[880,0],[660,0.28]].forEach(([f,dt])=>{
-    const o=audioCtx.createOscillator(), g=audioCtx.createGain();
-    o.type='sine'; o.frequency.value=f;
-    g.gain.setValueAtTime(0.0001,t+dt);
-    g.gain.exponentialRampToValueAtTime(0.5,t+dt+0.02);
-    g.gain.exponentialRampToValueAtTime(0.0001,t+dt+0.6);
-    o.connect(g); g.connect(audioCtx.destination);
-    o.start(t+dt); o.stop(t+dt+0.65);
-  });
+  const som = ($('somSel')&&$('somSel').value)||'alerta';
+  if(som==='suave'){
+    // ding-dong original
+    tocarNota(880,0,0.6,0.5,'sine');
+    tocarNota(660,0.28,0.6,0.5,'sine');
+  } else if(som==='alerta'){
+    // 3 tons ascendentes, timbre brilhante (estilo aeroporto, bem presente)
+    [[523,0],[659,0.22],[784,0.44]].forEach(([f,dt])=>{
+      tocarNota(f,dt,0.55,0.75,'triangle');
+      tocarNota(f*2,dt,0.35,0.28,'sine');   // harmônico p/ dar brilho
+    });
+    tocarNota(784,0.72,0.9,0.75,'triangle'); // nota final sustentada
+    tocarNota(1568,0.72,0.5,0.25,'sine');
+  } else if(som==='gongo'){
+    // batida grave e forte, com ressonância longa
+    [1,2.02,2.96,4.1].forEach((m,i)=>{
+      tocarNota(196*m,0,2.2-(i*0.3),[0.9,0.5,0.3,0.18][i],'sine');
+    });
+    setTimeout(()=>{ // segunda batida
+      [1,2.02,2.96,4.1].forEach((m,i)=>{
+        tocarNota(262*m,0,2.0-(i*0.3),[0.9,0.5,0.3,0.18][i],'sine');
+      });
+    },450);
+  }
 }
 function falar(texto){
   speechSynthesis.cancel();
@@ -509,7 +540,9 @@ function falar(texto){
   u.lang='pt-BR'; u.rate=0.92;
   const v=vozes.find(x=>x.name===$('voz').value);
   if(v) u.voice=v;
-  setTimeout(()=>speechSynthesis.speak(u),900);
+  const som=($('somSel')&&$('somSel').value)||'alerta';
+  const espera = som==='gongo'?2200 : som==='alerta'?1700 : 900;
+  setTimeout(()=>speechSynthesis.speak(u),espera);
 }
 const soletrar = n => String(n).padStart(3,'0').split('').join(', ');
 </script>
