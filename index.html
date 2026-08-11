@@ -128,13 +128,25 @@
   <button class="btn enorme fantasma" onclick="irPara('admin')">⚙️ Administração<small>Emitir senhas e zerar o dia</small></button>
 </div>
 
+<!-- ============ ESCOLHA DO GUICHÊ ============ -->
+<div class="tela" id="telaGuiche">
+  <button class="btn fantasma voltar" onclick="irPara('inicio')">← Início</button>
+  <h1>Qual é o seu guichê?</h1>
+  <div class="cartao" style="max-width:420px">
+    <input type="number" id="inputGuiche" min="1" max="99" value="1"
+      style="font-size:42px;width:140px;text-align:center"
+      onkeydown="if(event.key==='Enter')confirmarGuiche()">
+    <button class="btn enorme play" onclick="confirmarGuiche()">Confirmar guichê</button>
+  </div>
+</div>
+
 <!-- ============ ATENDENTE ============ -->
 <div class="tela" id="telaAtendente">
   <button class="btn fantasma voltar" onclick="irPara('inicio')">← Início</button>
-  <h1>Atendente</h1>
+  <h1>Atendente — Guichê <span id="tituloGuiche">?</span></h1>
   <div class="cartao">
-    <label class="mini">Meu guichê</label>
-    <input type="number" id="meuGuiche" min="1" max="99" value="1">
+    <span class="fila-info">Meu guichê: <b id="meuGuicheTxt">-</b></span>
+    <button class="btn fantasma" onclick="irPara('guiche')">Trocar guichê</button>
   </div>
   <div id="ultChamada">
     <div class="rotulo">Última senha chamada</div>
@@ -257,22 +269,34 @@ function marcarSync(ok){
 /* ============ NAVEGAÇÃO ============ */
 let modo='inicio';
 let pollTimer=null;
+let meuGuicheNum=null;   // definido na tela "Qual é o seu guichê?"
 function irPara(novoModo){
+  // atendente sempre passa antes pela escolha do guichê
+  if(novoModo==='atendente' && meuGuicheNum===null) novoModo='guiche';
   modo=novoModo;
   document.querySelectorAll('.tela').forEach(t=>t.classList.remove('ativa'));
-  const mapa={inicio:'telaInicio',atendente:'telaAtendente',admin:'telaAdmin',painel:'telaPainel'};
+  const mapa={inicio:'telaInicio',guiche:'telaGuiche',atendente:'telaAtendente',admin:'telaAdmin',painel:'telaPainel'};
   $(mapa[novoModo]).classList.add('ativa');
-  $('statusSync').style.display = novoModo==='inicio'?'none':'flex';
+  $('statusSync').style.display = (novoModo==='inicio'||novoModo==='guiche')?'none':'flex';
   clearInterval(pollTimer);
+  if(novoModo==='guiche'){ setTimeout(()=>$('inputGuiche').select(),100); }
   if(novoModo==='atendente'){ atualizarAtendente(); pollTimer=setInterval(atualizarAtendente,4000); }
   if(novoModo==='admin'){ atualizarAdmin(); pollTimer=setInterval(atualizarAdmin,4000); }
   if(novoModo==='painel' && painelAtivo){ pollTimer=setInterval(pollPainel,2000); }
+}
+function confirmarGuiche(){
+  const n = parseInt($('inputGuiche').value);
+  if(!n || n<1 || n>99){ alert('Informe um número de guichê entre 1 e 99.'); return; }
+  meuGuicheNum = n;
+  $('tituloGuiche').textContent = n;
+  $('meuGuicheTxt').textContent = n;
+  irPara('atendente');
 }
 
 /* ============ ATENDENTE ============ */
 async function chamarProxima(tipo){
   $('btnChP').disabled = $('btnChC').disabled = true;
-  const r = await acao({action:'chamar', tipo, guiche: parseInt($('meuGuiche').value)||1});
+  const r = await acao({action:'chamar', tipo, guiche: meuGuicheNum||1});
   if(r.ok){
     minhaUltima = r.chamada;
     mostrarUltAtendente(r.chamada);
@@ -316,9 +340,13 @@ async function atualizarAdmin(){
 }
 async function zerar(){
   if(!confirm('Zerar TODAS as senhas e o histórico para todos os guichês?')) return;
-  // Se o servidor tiver SENHA_ADMIN configurada, pede o PIN
-  const pin = prompt('PIN de administração (deixe em branco se não houver):') || undefined;
-  const r = await acao({action:'zerar', pin});
+  // tenta sem PIN; só pergunta se o servidor exigir
+  let r = await acao({action:'zerar'});
+  if(!r.ok && String(r.erro).toLowerCase().includes('pin')){
+    const pin = prompt('Este painel exige PIN de administração:');
+    if(pin===null) return;
+    r = await acao({action:'zerar', pin});
+  }
   if(!r.ok){ alert('Não foi possível zerar: '+r.erro); return; }
   ultimoTs = 0; minhaUltima = null;
   atualizarAdmin();
@@ -346,9 +374,18 @@ function ativarPainel(){
 async function pollPainel(){
   if(modo!=='painel'||!painelAtivo) return;
   const e = await lerEstado();
-  if(e.ultima && (e.ultima.ts||0) > ultimoTs){
-    ultimoTs = e.ultima.ts;
-    anunciarNoPainel(e.ultima);
+  // coleta TODAS as chamadas novas (histórico + última), não só a mais recente
+  const novos=[]; const vistos=new Set();
+  const add = c => {
+    if(c && (c.ts||0)>ultimoTs && !vistos.has(c.ts)){ vistos.add(c.ts); novos.push(c); }
+  };
+  (e.hist||[]).forEach(add);
+  add(e.ultima);
+  if(novos.length){
+    novos.sort((a,b)=>a.ts-b.ts);          // anuncia em ordem de chegada
+    ultimoTs = novos[novos.length-1].ts;
+    filaAnuncios.push(...novos);
+    processarAnuncios();
   } else if(!e.ultima && ultimoTs>0){
     ultimoTs=0;
     $('senhaAtual').textContent='— — —'; $('senhaAtual').className='';
@@ -356,6 +393,19 @@ async function pollPainel(){
     $('listaHist').innerHTML='<div id="vazio">Nenhuma senha chamada ainda.</div>';
     $('faixaSenha').style.display='none';
   }
+}
+// fila de anúncios: cada chamada tem seu momento de tela + som + voz
+let filaAnuncios=[], anunciando=false;
+function processarAnuncios(){
+  if(anunciando) return;
+  const ch = filaAnuncios.shift();
+  if(!ch) return;
+  anunciando=true;
+  anunciarNoPainel(ch);
+  const som=($('somSel')&&$('somSel').value)||'alerta';
+  const durSom = som==='gongo'?2200 : som==='alerta'?1700 : 900;
+  // reserva tempo para o som + a fala antes do próximo anúncio da fila
+  setTimeout(()=>{ anunciando=false; processarAnuncios(); }, durSom + 5000);
 }
 function anunciarNoPainel(ch){
   interromperSlides();
