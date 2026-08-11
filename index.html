@@ -91,17 +91,18 @@
   .hist-item.prior{color:var(--prior)}.hist-item.comum{color:var(--comum)}
   #vazio{color:var(--dim);font-size:clamp(12px,2vh,20px)}
   #relogio{position:absolute;top:1.5vh;right:1.5vw;font-family:'JetBrains Mono',monospace;font-weight:700;font-size:clamp(14px,3.2vh,36px);color:var(--dim)}
-  #telaSlides{display:none;flex:1;flex-direction:column;background:#000;min-height:0}
-  #slideImg{flex:1;min-height:0;width:100%;object-fit:contain}
-  #faixaSenha{
-    display:none;
-    background:rgba(11,18,32,.98);border-top:2px solid var(--line);
-    padding:1.2vh 2vw;justify-content:center;align-items:baseline;gap:1.2em;
-    font-family:'JetBrains Mono',monospace;font-weight:800;font-size:clamp(18px,4.5vh,56px);
+  #telaSlides{display:none;flex:1;background:#000;min-height:0}
+  #slideImg{flex:1;min-width:0;object-fit:contain}
+  #colunaSenhas{
+    width:min(18vw,260px);background:var(--panel);border-left:2px solid var(--line);
+    display:flex;flex-direction:column;gap:1vh;
+    padding:7vh 1vw 2vh;   /* padding superior deixa livre a área do "sincronizado" */
   }
-  #faixaSenha .rot{font-family:'Archivo',sans-serif;font-weight:700;font-size:.45em;letter-spacing:.25em;text-transform:uppercase;color:var(--dim)}
-  #faixaCod.prior{color:var(--prior)} #faixaCod.comum{color:var(--comum)}
-  #faixaSenha .g{font-family:'Archivo',sans-serif;font-weight:700;font-size:.6em;color:var(--ink)}
+  #colunaSenhas h2{
+    font-size:clamp(10px,1.7vh,16px);letter-spacing:.25em;text-transform:uppercase;
+    color:var(--dim);font-weight:700;text-align:center;
+  }
+  #colunaSenhas .hist-item{font-size:clamp(14px,3.2vh,36px)}
   #barraPainel{
     background:var(--panel);border-top:2px solid var(--line);
     padding:10px 14px;display:flex;flex-wrap:wrap;gap:10px;align-items:center;justify-content:center;
@@ -200,7 +201,10 @@
     </div>
     <div id="telaSlides">
       <img id="slideImg" alt="Slide">
-      <div id="faixaSenha"><span class="rot">Última senha</span><span id="faixaCod">—</span><span class="g">Guichê <span id="faixaG">-</span></span></div>
+      <aside id="colunaSenhas" style="display:none">
+        <h2>Últimas senhas</h2>
+        <div id="listaSlides"></div>
+      </aside>
     </div>
   </div>
   <div id="barraPainel">
@@ -392,7 +396,7 @@ async function pollPainel(){
     $('senhaAtual').textContent='— — —'; $('senhaAtual').className='';
     $('tipoChamada').textContent='Aguardando chamada'; $('tipoChamada').className='';
     $('listaHist').innerHTML='<div id="vazio">Nenhuma senha chamada ainda.</div>';
-    $('faixaSenha').style.display='none';
+    $('colunaSenhas').style.display='none';
   }
 }
 // fila de anúncios: cada chamada tem seu momento de tela + som + voz
@@ -500,15 +504,20 @@ function mostrarSlideAtual(){
   $('telaChamada').style.display='none';
   $('telaSlides').style.display='flex';
   $('slideImg').src=show.slides[show.idx];
-  const u=cache.ultima;
-  const faixa=$('faixaSenha');
-  if(u){
-    faixa.style.display='flex';
-    const fc=$('faixaCod');
-    fc.textContent=u.tipo+String(u.num).padStart(3,'0');
-    fc.className=u.tipo==='P'?'prior':'comum';
-    $('faixaG').textContent=u.guiche;
-  } else faixa.style.display='none';
+  atualizarColunaSlides();
+}
+function atualizarColunaSlides(){
+  const hist=(cache.hist||[]).slice(0,3);
+  const col=$('colunaSenhas');
+  if(!hist.length){ col.style.display='none'; return; }  // sem chamadas: slide em tela cheia
+  col.style.display='flex';
+  const l=$('listaSlides'); l.innerHTML='';
+  hist.forEach(h=>{
+    const d=document.createElement('div');
+    d.className='hist-item '+(h.tipo==='P'?'prior':'comum');
+    d.innerHTML = h.tipo+String(h.num).padStart(3,'0')+' <span class="g">G'+h.guiche+'</span>';
+    l.appendChild(d);
+  });
 }
 function interromperSlides(){
   clearTimeout(show.timerVolta);
