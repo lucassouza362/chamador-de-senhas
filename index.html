@@ -91,11 +91,11 @@
   .hist-item.prior{color:var(--prior)}.hist-item.comum{color:var(--comum)}
   #vazio{color:var(--dim);font-size:clamp(12px,2vh,20px)}
   #relogio{position:absolute;top:1.5vh;right:1.5vw;font-family:'JetBrains Mono',monospace;font-weight:700;font-size:clamp(14px,3.2vh,36px);color:var(--dim)}
-  #telaSlides{display:none;flex:1;align-items:center;justify-content:center;background:#000;position:relative;min-height:0}
-  #slideImg{max-width:100%;max-height:100%;object-fit:contain}
+  #telaSlides{display:none;flex:1;flex-direction:column;background:#000;min-height:0}
+  #slideImg{flex:1;min-height:0;width:100%;object-fit:contain}
   #faixaSenha{
-    display:none;position:absolute;bottom:0;left:0;right:0;
-    background:rgba(11,18,32,.92);border-top:2px solid var(--line);
+    display:none;
+    background:rgba(11,18,32,.98);border-top:2px solid var(--line);
     padding:1.2vh 2vw;justify-content:center;align-items:baseline;gap:1.2em;
     font-family:'JetBrains Mono',monospace;font-weight:800;font-size:clamp(18px,4.5vh,56px);
   }
@@ -364,6 +364,7 @@ setInterval(()=>{
 function ativarPainel(){
   painelAtivo=true;
   $('ativarPainel').style.display='none';
+  $('barraPainel').classList.add('oculta');   // projetor começa limpo; mexa o mouse p/ ver a barra
   audioCtx = audioCtx || new (window.AudioContext||window.webkitAudioContext)();
   lerEstado().then(e=>{
     if(e.ultima){ ultimoTs = e.ultima.ts||0; desenharChamada(e.ultima,false); }
@@ -524,6 +525,22 @@ function telaCheia(){
   else document.exitFullscreen();
 }
 function alternarBarra(){ $('barraPainel').classList.toggle('oculta'); }
+
+/* --- barra some sozinha no modo painel (estilo player de vídeo) --- */
+let timerBarra=null;
+function esconderBarraDepois(){
+  clearTimeout(timerBarra);
+  timerBarra=setTimeout(()=>{
+    if(modo!=='painel'||!painelAtivo) return;
+    if($('barraPainel').matches(':hover')) { esconderBarraDepois(); return; } // mouse em cima: espera
+    $('barraPainel').classList.add('oculta');
+  },3000);
+}
+document.addEventListener('mousemove',()=>{
+  if(modo!=='painel'||!painelAtivo) return;
+  $('barraPainel').classList.remove('oculta');
+  esconderBarraDepois();
+});
 document.addEventListener('keydown',e=>{
   if(modo!=='painel') return;
   if(e.target.tagName==='INPUT'||e.target.tagName==='SELECT') return;
