@@ -57,6 +57,17 @@
   #btnRepetir{background:var(--panel2);color:var(--texto);border:1px solid var(--borda);padding:12px 26px;font-size:1rem}
   #avisoAtend{min-height:22px;color:var(--vermelho);font-weight:600}
 
+  #caixaIntervalo{background:var(--panel);border:1px solid var(--borda);border-radius:14px;
+    padding:18px 22px;display:flex;flex-direction:column;gap:12px;min-width:300px;max-width:380px}
+  #caixaIntervalo h3{font-size:.8rem;color:var(--suave);text-transform:uppercase;letter-spacing:.1em;text-align:center;font-weight:600}
+  .linhaIntervalo{display:flex;gap:14px;justify-content:center}
+  .linhaIntervalo label{color:var(--suave);display:flex;align-items:center;gap:8px}
+  .linhaIntervalo input{width:80px;background:var(--panel2);border:1px solid var(--borda);border-radius:8px;
+    color:var(--texto);padding:10px;font-size:1.2rem;font-weight:700;text-align:center}
+  #intMsg{background:var(--panel2);border:1px solid var(--borda);border-radius:8px;
+    color:var(--texto);padding:10px 12px;font-size:.9rem;width:100%}
+  #btnIntervalo{background:linear-gradient(180deg,var(--verde),#1f7d4a);color:#fff;padding:14px;font-size:1rem;font-weight:700}
+
   /* ---------- Painel (projetor) ---------- */
   #telaPainel{position:fixed;inset:0;background:#000;overflow:hidden}
   #areaSlides{position:absolute;top:0;left:0;right:0;bottom:0;display:flex;align-items:center;justify-content:center}
@@ -74,6 +85,7 @@
   .itemHist .n{font-size:1.9rem;font-weight:800;line-height:1}
   .itemHist .g{color:var(--suave);font-size:.85rem}
   .itemHist.pri .n{color:var(--ambar)}
+  .itemHist.int .n{color:var(--verde)}
 
   #overlayChamada{position:absolute;inset:0;background:rgba(5,10,18,.96);z-index:8;
     display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px}
@@ -161,6 +173,17 @@
   </div>
 
   <button id="btnRepetir" onclick="repetir()">🔁 Repetir última chamada</button>
+
+  <div id="caixaIntervalo">
+    <h3>Chamar intervalo de senhas</h3>
+    <div class="linhaIntervalo">
+      <label>De <input type="number" id="intDe" min="1" max="150" placeholder="21"></label>
+      <label>até <input type="number" id="intAte" min="1" max="150" placeholder="40"></label>
+    </div>
+    <input type="text" id="intMsg" placeholder="Dirijam-se à sala de atendimento" maxlength="120">
+    <button id="btnIntervalo" onclick="chamarIntervalo()">📣 Anunciar intervalo</button>
+  </div>
+
   <div id="avisoAtend"></div>
   <button class="linkVoltar" onclick="irPara('home')">Início</button>
 </div>
@@ -312,6 +335,23 @@ async function chamar(tipo){
   }catch(err){ aviso.textContent = 'Falha de conexão. Tente novamente.'; }
 }
 
+async function chamarIntervalo(){
+  const aviso = document.getElementById('avisoAtend');
+  aviso.textContent = '';
+  const de = Number(document.getElementById('intDe').value);
+  const ate = Number(document.getElementById('intAte').value);
+  if (!de || !ate){ aviso.textContent = 'Preencha os dois números do intervalo.'; return; }
+  const msg = document.getElementById('intMsg').value.trim();
+  try{
+    const r = await api('POST', { acao: 'intervalo', de, ate, guiche, msg });
+    if (r.erro || r.ok === false) aviso.textContent = r.erro || 'Intervalo inválido.';
+    else {
+      document.getElementById('intDe').value = '';
+      document.getElementById('intAte').value = '';
+    }
+  }catch(err){ aviso.textContent = 'Falha de conexão. Tente novamente.'; }
+}
+
 async function repetir(){
   const aviso = document.getElementById('avisoAtend');
   aviso.textContent = '';
@@ -361,12 +401,16 @@ function desenharHistorico(histAsc){
   const vistos = new Set(); const itens = [];
   for (let i = histAsc.length - 1; i >= 0 && itens.length < 3; i--){
     const c = histAsc[i];
-    const chave = c.senha + '|' + c.guiche;
+    const chave = (c.intervalo ? c.de + '-' + c.ate : c.senha) + '|' + c.guiche;
     if (!vistos.has(chave)){ vistos.add(chave); itens.push(c); }
   }
   // com chamadas: mostra a faixa e reserva o espaço; sem chamadas: slide em tela cheia
   document.getElementById('telaPainel').classList.toggle('comFaixa', itens.length > 0);
-  document.getElementById('faixaItens').innerHTML = itens.map(c => `
+  document.getElementById('faixaItens').innerHTML = itens.map(c => c.intervalo ? `
+    <div class="itemHist int">
+      <span class="n">${c.de}–${c.ate}</span>
+      <span class="g">atendimento</span>
+    </div>` : `
     <div class="itemHist ${c.tipo === 'prioridade' ? 'pri' : ''}">
       <span class="n">${c.senha}</span>
       <span class="g">Guichê ${c.guiche}</span>
@@ -378,12 +422,30 @@ function processarFila(){
   anunciando = true;
   const c = filaAnuncios.shift();
 
-  document.getElementById('ovNum').textContent = c.senha;
-  document.getElementById('ovGui').textContent = 'Guichê ' + c.guiche;
+  const num = document.getElementById('ovNum');
+  const gui = document.getElementById('ovGui');
   const tag = document.getElementById('ovTag');
-  const pri = c.tipo === 'prioridade';
-  tag.textContent = pri ? 'PRIORIDADE' : '';
-  tag.style.color = 'var(--ambar)';
+  const rot = document.querySelector('#overlayChamada .rot');
+  let duracao = 7000;
+
+  if (c.intervalo){
+    rot.textContent = 'Senhas';
+    tag.textContent = '';
+    num.textContent = c.de + ' – ' + c.ate;
+    num.style.fontSize = '15vw';                 // intervalo tem mais dígitos
+    gui.textContent = c.msg || 'Dirijam-se à sala de atendimento';
+    gui.style.fontSize = '3.4vw';
+    duracao = 11000;                             // fica mais tempo na tela
+  } else {
+    rot.textContent = 'Senha';
+    const pri = c.tipo === 'prioridade';
+    tag.textContent = pri ? 'PRIORIDADE' : '';
+    tag.style.color = 'var(--ambar)';
+    num.textContent = c.senha;
+    num.style.fontSize = '22vw';
+    gui.textContent = 'Guichê ' + c.guiche;
+    gui.style.fontSize = '5vw';
+  }
   document.getElementById('overlayChamada').classList.remove('oculto');
 
   tocarSom();
@@ -393,13 +455,18 @@ function processarFila(){
     document.getElementById('overlayChamada').classList.add('oculto');
     anunciando = false;
     processarFila(); // próxima da fila, se houver — nenhuma chamada é pulada
-  }, 7000);
+  }, duracao);
 }
 
 function falar(c){
   if (!document.getElementById('chkVoz').checked || !('speechSynthesis' in window)) return;
-  const pri = c.tipo === 'prioridade';
-  const texto = `Senha ${pri ? 'prioritária ' : ''}${c.senha}. Guichê ${c.guiche}.`;
+  let texto;
+  if (c.intervalo){
+    texto = `Atenção: senhas ${c.de} a ${c.ate}. ${c.msg || 'Dirijam-se à sala de atendimento.'}`;
+  } else {
+    const pri = c.tipo === 'prioridade';
+    texto = `Senha ${pri ? 'prioritária ' : ''}${c.senha}. Guichê ${c.guiche}.`;
+  }
   const u = new SpeechSynthesisUtterance(texto);
   u.lang = 'pt-BR'; u.rate = 0.95;
   const voz = speechSynthesis.getVoices().find(v => v.lang && v.lang.startsWith('pt'));
