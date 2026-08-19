@@ -59,19 +59,23 @@
 
   /* ---------- Painel (projetor) ---------- */
   #telaPainel{position:fixed;inset:0;background:#000;overflow:hidden}
-  #areaSlides{position:absolute;inset:0;display:flex;align-items:center;justify-content:center}
+  #areaSlides{position:absolute;top:0;left:0;right:0;bottom:0;display:flex;align-items:center;justify-content:center}
+  #telaPainel.comFaixa #areaSlides{bottom:76px}  /* espaço reservado: a faixa nunca cobre o slide */
   #areaSlides img{max-width:100%;max-height:100%;object-fit:contain}
   #marcaOcioso{color:#22344f;font-size:2rem;font-weight:600;letter-spacing:.05em;text-align:center}
 
-  #colunaHist{position:absolute;top:0;right:0;bottom:0;width:220px;background:rgba(10,16,26,.88);
-    border-left:1px solid var(--borda);display:flex;flex-direction:column;gap:10px;padding:16px 14px;z-index:5}
-  #colunaHist h3{color:var(--suave);font-size:.75rem;text-transform:uppercase;letter-spacing:.12em;text-align:center}
-  .itemHist{background:var(--panel);border:1px solid var(--borda);border-radius:10px;padding:10px;text-align:center}
-  .itemHist .n{font-size:2rem;font-weight:800}
-  .itemHist .g{color:var(--suave);font-size:.8rem}
+  #faixaHist{position:absolute;left:0;right:0;bottom:0;height:76px;background:rgba(10,16,26,.96);
+    border-top:1px solid var(--borda);display:none;align-items:center;gap:20px;padding:0 22px;z-index:5}
+  #telaPainel.comFaixa #faixaHist{display:flex}
+  #faixaHist h3{color:var(--suave);font-size:.7rem;text-transform:uppercase;letter-spacing:.14em;white-space:nowrap}
+  #faixaItens{display:flex;gap:14px;align-items:center;flex:1;overflow:hidden}
+  .itemHist{background:var(--panel);border:1px solid var(--borda);border-radius:10px;
+    padding:6px 16px;display:flex;align-items:baseline;gap:10px;white-space:nowrap}
+  .itemHist .n{font-size:1.9rem;font-weight:800;line-height:1}
+  .itemHist .g{color:var(--suave);font-size:.85rem}
   .itemHist.pri .n{color:var(--ambar)}
 
-  #overlayChamada{position:absolute;inset:0;right:220px;background:rgba(5,10,18,.96);z-index:8;
+  #overlayChamada{position:absolute;inset:0;background:rgba(5,10,18,.96);z-index:8;
     display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px}
   #overlayChamada .rot{font-size:2.2vw;color:var(--suave);text-transform:uppercase;letter-spacing:.25em}
   #overlayChamada .tag{font-size:3vw;font-weight:800;letter-spacing:.1em}
@@ -79,7 +83,7 @@
   #overlayChamada .gui{font-size:5vw;font-weight:700;color:var(--texto);margin-top:1vw}
   @keyframes pulsa{from{transform:scale(1)}to{transform:scale(1.05)}}
 
-  #barraPainel{position:absolute;top:0;left:0;right:220px;z-index:10;background:rgba(13,20,32,.95);
+  #barraPainel{position:absolute;top:0;left:0;right:0;z-index:10;background:rgba(13,20,32,.95);
     border-bottom:1px solid var(--borda);display:flex;gap:10px;align-items:center;padding:10px 14px;flex-wrap:wrap;
     transform:translateY(-110%);transition:transform .25s}
   #barraPainel.visivel{transform:translateY(0)}
@@ -165,9 +169,9 @@
 <div id="telaPainel" class="oculto">
   <div id="areaSlides"><div id="marcaOcioso">Aguardando chamadas…</div></div>
 
-  <div id="colunaHist">
-    <h3>Últimas senhas</h3>
-    <div id="listaHist"></div>
+  <div id="faixaHist">
+    <h3>Últimas<br>senhas</h3>
+    <div id="faixaItens"></div>
   </div>
 
   <div id="overlayChamada" class="oculto">
@@ -360,10 +364,12 @@ function desenharHistorico(histAsc){
     const chave = c.senha + '|' + c.guiche;
     if (!vistos.has(chave)){ vistos.add(chave); itens.push(c); }
   }
-  document.getElementById('listaHist').innerHTML = itens.map(c => `
+  // com chamadas: mostra a faixa e reserva o espaço; sem chamadas: slide em tela cheia
+  document.getElementById('telaPainel').classList.toggle('comFaixa', itens.length > 0);
+  document.getElementById('faixaItens').innerHTML = itens.map(c => `
     <div class="itemHist ${c.tipo === 'prioridade' ? 'pri' : ''}">
-      <div class="n">${c.senha}</div>
-      <div class="g">Guichê ${c.guiche}</div>
+      <span class="n">${c.senha}</span>
+      <span class="g">Guichê ${c.guiche}</span>
     </div>`).join('');
 }
 
