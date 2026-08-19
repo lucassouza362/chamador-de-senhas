@@ -1,98 +1,116 @@
 import { Redis } from '@upstash/redis';
 
-// Aceita tanto as variáveis criadas pela integração da Vercel (KV_*)
-// quanto as padrão do Upstash (UPSTASH_*)
 const redis = new Redis({
-  url: process.env.UPSTASH_REDIS_REST_URL || process.env.KV_REST_API_URL,
-  token: process.env.UPSTASH_REDIS_REST_TOKEN || process.env.KV_REST_API_TOKEN,
+  url: process.env.KV_REST_API_URL || process.env.UPSTASH_REDIS_REST_URL,
+  token: process.env.KV_REST_API_TOKEN || process.env.UPSTASH_REDIS_REST_TOKEN,
 });
 
+// Faixas fixas das senhas físicas
+const MAX_PRIORIDADE = 20;  // senhas 1 a 20
+const BASE_COMUM = 20;      // comum começa em 21
+const MAX_COMUM = 150;      // até 150
+
 const K = {
-  emitP: 'senha:emitP',
-  emitC: 'senha:emitC',
-  chamP: 'senha:chamP',
-  chamC: 'senha:chamC',
-  ultima: 'senha:ultima',
-  hist: 'senha:hist',
+  prioridade: 'chamador:prioridade', // última senha prioritária chamada (0 a 20)
+  comum: 'chamador:comum',           // última senha comum chamada (20 a 150)
+  historico: 'chamador:historico',   // lista de chamadas (mais recente primeiro)
+  seq: 'chamador:seq',               // id incremental de cada chamada (fila de anúncios)
 };
 
-async function estadoAtual() {
-  const [emitP, emitC, chamP, chamC, ultima, hist] = await Promise.all([
-    redis.get(K.emitP), redis.get(K.emitC),
-    redis.get(K.chamP), redis.get(K.chamC),
-    redis.get(K.ultima),
-    redis.lrange(K.hist, 0, 4),
-  ]);
-  return {
-    emitP: Number(emitP) || 0,
-    emitC: Number(emitC) || 0,
-    chamP: Number(chamP) || 0,
-    chamC: Number(chamC) || 0,
-    ultima: ultima || null,
-    hist: (hist || []).map(h => (typeof h === 'string' ? JSON.parse(h) : h)),
-  };
+function parseItem(x) {
+  if (typeof x === 'string') {
+    try { return JSON.parse(x); } catch { return null; }
+  }
+  return x;
 }
 
 export default async function handler(req, res) {
   res.setHeader('Cache-Control', 'no-store');
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+  res.setHeader('Access-Control-Allow-Methods', 'GET,POST,OPTIONS');
+  if (req.method === 'OPTIONS') return res.status(204).end();
 
   try {
     if (req.method === 'GET') {
-      return res.status(200).json(await estadoAtual());
+      const [pri, com, hist] = await Promise.all([
+        redis.get(K.prioridade),
+        redis.get(K.comum),
+        redis.lrange(K.historico, 0, 14),
+      ]);
+      const prioridade = Math.min(Number(pri) || 0, MAX_PRIORIDADE);
+      const comum = Math.min(Math.max(Number(com) || BASE_COMUM, BASE_COMUM), MAX_COMUM);
+      return res.status(200).json({
+        prioridade,
+        comum,
+        historico: (hist || []).map(parseItem).filter(Boolean),
+        pinNecessario: Boolean(process.env.ADMIN_PIN),
+        limites: { maxPrioridade: MAX_PRIORIDADE, baseComum: BASE_COMUM, maxComum: MAX_COMUM },
+      });
     }
 
     if (req.method === 'POST') {
-      const { action, tipo, guiche, chamada, pin } = req.body || {};
+      const body = typeof req.body === 'string' ? JSON.parse(req.body || '{}') : (req.body || {});
+      const { acao } = body;
 
-      if (action === 'chamar') {
-        if (tipo !== 'P' && tipo !== 'C') return res.status(400).json({ erro: 'tipo inválido' });
-        // INCR é atômico: dois atendentes nunca recebem o mesmo número
-        const num = await redis.incr(tipo === 'P' ? K.chamP : K.chamC);
-        // garante que a "emissão" acompanha caso não usem a recepção
-        const emitKey = tipo === 'P' ? K.emitP : K.emitC;
-        const emit = Number(await redis.get(emitKey)) || 0;
-        if (emit < num) await redis.set(emitKey, num);
+      // ---- Chamar próxima senha ----
+      if (acao === 'chamar') {
+        const tipo = body.tipo === 'prioridade' ? 'prioridade' : 'comum';
+        const guiche = String(body.guiche || '?').slice(0, 20);
+        const key = tipo === 'prioridade' ? K.prioridade : K.comum;
+        const max = tipo === 'prioridade' ? MAX_PRIORIDADE : MAX_COMUM;
 
-        const ch = { tipo, num, guiche: Number(guiche) || 1, ts: Date.now() };
-        await Promise.all([
-          redis.set(K.ultima, ch),
-          redis.lpush(K.hist, JSON.stringify(ch)),
-        ]);
-        await redis.ltrim(K.hist, 0, 4);
-        return res.status(200).json({ ok: true, chamada: ch, estado: await estadoAtual() });
-      }
-
-      if (action === 'repetir') {
-        if (!chamada || !chamada.tipo || !chamada.num) {
-          return res.status(400).json({ erro: 'chamada inválida' });
+        if (tipo === 'comum') {
+          // Garante que o contador comum parte de 20 (primeira chamada = 21)
+          await redis.set(K.comum, BASE_COMUM, { nx: true });
         }
-        const ch = { ...chamada, ts: Date.now() }; // novo ts faz o painel reanunciar
-        await redis.set(K.ultima, ch);
-        return res.status(200).json({ ok: true, chamada: ch });
+
+        const n = await redis.incr(key); // atômico: nunca duplica sob concorrência
+        if (n > max) {
+          await redis.set(key, max); // trava no teto da faixa
+          return res.status(200).json({ esgotado: true, tipo });
+        }
+
+        const id = await redis.incr(K.seq);
+        const chamada = { id, senha: n, tipo, guiche, ts: Date.now() };
+        await redis.lpush(K.historico, JSON.stringify(chamada));
+        await redis.ltrim(K.historico, 0, 29);
+        return res.status(200).json({ ok: true, chamada });
       }
 
-      if (action === 'emitir') {
-        if (tipo !== 'P' && tipo !== 'C') return res.status(400).json({ erro: 'tipo inválido' });
-        await redis.incr(tipo === 'P' ? K.emitP : K.emitC);
-        return res.status(200).json({ ok: true, estado: await estadoAtual() });
+      // ---- Repetir última chamada (do guichê, ou geral) ----
+      if (acao === 'repetir') {
+        const guiche = String(body.guiche || '');
+        const hist = (await redis.lrange(K.historico, 0, 29)).map(parseItem).filter(Boolean);
+        const ultima = guiche ? hist.find(c => String(c.guiche) === guiche) : hist[0];
+        if (!ultima) return res.status(200).json({ ok: false, erro: 'Nenhuma chamada para repetir' });
+
+        const id = await redis.incr(K.seq);
+        const chamada = { ...ultima, id, ts: Date.now(), repetida: true };
+        await redis.lpush(K.historico, JSON.stringify(chamada));
+        await redis.ltrim(K.historico, 0, 29);
+        return res.status(200).json({ ok: true, chamada });
       }
 
-      if (action === 'zerar') {
-        // Proteção opcional: defina a variável de ambiente SENHA_ADMIN na Vercel
-        // e o "zerar" passa a exigir esse PIN.
-        if (process.env.SENHA_ADMIN && pin !== process.env.SENHA_ADMIN) {
+      // ---- Reset (admin): recomeça o ciclo de senhas ----
+      if (acao === 'reset') {
+        const pinEnv = process.env.ADMIN_PIN;
+        if (pinEnv && String(body.pin || '') !== String(pinEnv)) {
           return res.status(403).json({ erro: 'PIN incorreto' });
         }
-        await redis.del(K.emitP, K.emitC, K.chamP, K.chamC, K.ultima, K.hist);
+        await Promise.all([
+          redis.set(K.prioridade, 0),
+          redis.set(K.comum, BASE_COMUM),
+          redis.del(K.historico),
+        ]);
         return res.status(200).json({ ok: true });
       }
 
-      return res.status(400).json({ erro: 'ação desconhecida' });
+      return res.status(400).json({ erro: 'Ação inválida' });
     }
 
-    return res.status(405).json({ erro: 'método não permitido' });
+    return res.status(405).json({ erro: 'Método não permitido' });
   } catch (e) {
-    console.error(e);
-    return res.status(500).json({ erro: 'falha no servidor: ' + (e.message || e) });
+    return res.status(500).json({ erro: String((e && e.message) || e) });
   }
 }
