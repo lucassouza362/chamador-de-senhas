@@ -78,6 +78,23 @@ export default async function handler(req, res) {
         return res.status(200).json({ ok: true, chamada });
       }
 
+      // ---- Chamar um intervalo de senhas (lote para a sala de atendimento) ----
+      if (acao === 'intervalo') {
+        const de = Number(body.de);
+        const ate = Number(body.ate);
+        if (!Number.isInteger(de) || !Number.isInteger(ate) ||
+            de < 1 || ate > MAX_COMUM || de > ate) {
+          return res.status(200).json({ ok: false, erro: 'Intervalo inválido (use números de 1 a 150, com início ≤ fim).' });
+        }
+        const guiche = String(body.guiche || '?').slice(0, 20);
+        const msg = String(body.msg || '').slice(0, 120);
+        const id = await redis.incr(K.seq);
+        const chamada = { id, intervalo: true, de, ate, guiche, msg, ts: Date.now() };
+        await redis.lpush(K.historico, JSON.stringify(chamada));
+        await redis.ltrim(K.historico, 0, 29);
+        return res.status(200).json({ ok: true, chamada });
+      }
+
       // ---- Repetir última chamada (do guichê, ou geral) ----
       if (acao === 'repetir') {
         const guiche = String(body.guiche || '');
