@@ -4,623 +4,523 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Chamador de Senhas</title>
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link href="https://fonts.googleapis.com/css2?family=Archivo:wght@400..900&family=JetBrains+Mono:wght@500;700;800&display=swap" rel="stylesheet">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
 <style>
   :root{
-    --bg:#0b1220; --panel:#111b2e; --line:#22304a;
-    --ink:#eaf2ff; --dim:#8fa3c4;
-    --prior:#ffb020; --comum:#37d67a; --alert:#ff5d5d;
+    --bg:#0d1420; --panel:#16202f; --panel2:#1d2a3d; --borda:#2b3b52;
+    --texto:#e8eef7; --suave:#8fa3bd;
+    --azul:#2e7dd1; --azul2:#1f5fa8;
+    --ambar:#e8a020; --ambar2:#c07f0a;
+    --verde:#2fae6a; --vermelho:#d64545;
+    font-size:16px;
   }
   *{box-sizing:border-box;margin:0;padding:0}
-  html,body{height:100%}
-  body{background:var(--bg);color:var(--ink);font-family:'Archivo',system-ui,sans-serif;overflow-x:hidden}
-  .tela{display:none;min-height:100vh;flex-direction:column;align-items:center;gap:16px;padding:24px}
-  .tela.ativa{display:flex}
-  h1{font-size:20px;letter-spacing:.15em;text-transform:uppercase;color:var(--dim);font-weight:800;text-align:center}
-  .cartao{
-    background:var(--panel);border:2px solid var(--line);border-radius:18px;
-    padding:18px;display:flex;flex-wrap:wrap;gap:12px;align-items:center;justify-content:center;
-    max-width:820px;width:100%;
-  }
-  .cartao h3{width:100%;text-align:center;font-size:12px;letter-spacing:.25em;text-transform:uppercase;color:var(--dim)}
-  .btn{
-    font-family:inherit;font-weight:800;font-size:16px;border:none;border-radius:12px;
-    padding:16px 22px;cursor:pointer;color:var(--ink);background:#1a2743;
-    transition:transform .08s,filter .15s;
-  }
-  .btn:hover{filter:brightness(1.2)} .btn:active{transform:scale(.96)}
-  .btn:focus-visible{outline:3px solid #6ea8ff;outline-offset:2px}
-  .btn:disabled{opacity:.4;cursor:not-allowed}
-  .btn.enorme{font-size:22px;padding:24px 30px;width:100%;max-width:420px}
-  .btn.p{background:var(--prior);color:#1a1a1a}
-  .btn.c{background:var(--comum);color:#062b16}
-  .btn.fantasma{background:transparent;border:2px solid var(--line);color:var(--dim)}
-  .btn.play{background:var(--comum);color:#062b16}
-  .btn.stop{background:var(--alert);color:#fff}
-  .fila-info{
-    font-family:'JetBrains Mono',monospace;font-weight:700;font-size:16px;
-    color:var(--dim);background:#0d1626;border-radius:10px;padding:12px 18px;
-  }
-  .fila-info b{color:var(--ink)}
-  select,input[type=number]{
-    font-family:inherit;font-weight:700;font-size:16px;color:var(--ink);
-    background:#0d1626;border:2px solid var(--line);border-radius:10px;padding:12px 14px;
-  }
-  input[type=number]{width:90px;text-align:center}
-  label.mini{font-size:12px;color:var(--dim);font-weight:700;letter-spacing:.05em;text-transform:uppercase}
-  .aviso{font-size:12px;color:var(--dim);width:100%;text-align:center}
-  .voltar{position:fixed;top:12px;left:12px;z-index:20}
-  .status-sync{
-    position:fixed;top:14px;right:14px;display:flex;gap:8px;align-items:center;
-    font-size:12px;font-weight:700;color:var(--dim);z-index:20;
-  }
-  .status-sync .dot{width:10px;height:10px;border-radius:50%;background:var(--alert)}
-  .status-sync.ok .dot{background:var(--comum)}
-  #telaInicio .btn.enorme{display:flex;flex-direction:column;gap:6px;align-items:center}
-  #telaInicio .btn.enorme small{font-weight:600;font-size:13px;opacity:.75}
-  #ultChamada{
-    background:var(--panel);border:2px solid var(--line);border-radius:18px;
-    padding:14px 36px;text-align:center;min-width:300px;
-  }
-  #ultChamada .rotulo{font-size:11px;letter-spacing:.3em;text-transform:uppercase;color:var(--dim);font-weight:700}
-  #ultCod{font-family:'JetBrains Mono',monospace;font-weight:800;font-size:52px;line-height:1.15}
-  #ultCod.prior{color:var(--prior)} #ultCod.comum{color:var(--comum)}
-  #ultGuiche{color:var(--dim);font-weight:600}
-  #ultGuiche b{color:var(--ink)}
-  #telaPainel{padding:0;gap:0}
-  #painelConteudo{flex:1;width:100%;display:flex;flex-direction:column;min-height:0}
-  #telaChamada{flex:1;display:flex;background:var(--bg);min-height:0}
-  #principal{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2vh;position:relative;padding:2vh 2vw}
-  #tipoChamada{font-weight:800;letter-spacing:.35em;text-transform:uppercase;font-size:clamp(16px,3.2vh,44px);color:var(--dim);padding:.4em 1.2em;border:2px solid var(--line);border-radius:999px;transition:all .3s}
-  #tipoChamada.prior{color:#1a1a1a;background:var(--prior);border-color:var(--prior)}
-  #tipoChamada.comum{color:#062b16;background:var(--comum);border-color:var(--comum)}
-  #senhaAtual{font-family:'JetBrains Mono',monospace;font-weight:800;font-size:clamp(80px,32vh,360px);line-height:1;letter-spacing:.04em}
-  #senhaAtual.prior{color:var(--prior);text-shadow:0 0 70px rgba(255,176,32,.35)}
-  #senhaAtual.comum{color:var(--comum);text-shadow:0 0 70px rgba(55,214,122,.3)}
-  #guicheLinha{font-size:clamp(20px,5.5vh,70px);font-weight:600;color:var(--dim)}
-  #guicheLinha b{color:var(--ink);font-weight:800}
-  @keyframes piscar{0%,100%{opacity:1}25%,75%{opacity:.15}50%{opacity:1}}
-  .piscando{animation:piscar 1.2s ease 2}
-  @media (prefers-reduced-motion:reduce){.piscando{animation:none}}
-  #historico{width:min(24vw,340px);background:var(--panel);border-left:2px solid var(--line);display:flex;flex-direction:column;padding:2vh 1.2vw;gap:1vh}
-  #historico h2{font-size:clamp(11px,1.9vh,20px);letter-spacing:.3em;text-transform:uppercase;color:var(--dim);font-weight:700;margin-bottom:.5vh}
-  .hist-item{display:flex;justify-content:space-between;align-items:baseline;font-family:'JetBrains Mono',monospace;font-weight:700;font-size:clamp(16px,3.6vh,44px);padding:.35em .5em;border-radius:10px;background:#0d1626}
-  .hist-item .g{font-size:.55em;color:var(--dim);font-family:'Archivo',sans-serif;font-weight:600}
-  .hist-item.prior{color:var(--prior)}.hist-item.comum{color:var(--comum)}
-  #vazio{color:var(--dim);font-size:clamp(12px,2vh,20px)}
-  #relogio{position:absolute;top:1.5vh;right:1.5vw;font-family:'JetBrains Mono',monospace;font-weight:700;font-size:clamp(14px,3.2vh,36px);color:var(--dim)}
-  #telaSlides{display:none;flex:1;background:#000;min-height:0}
-  #slideImg{flex:1;min-width:0;object-fit:contain}
-  #colunaSenhas{
-    width:min(18vw,260px);background:var(--panel);border-left:2px solid var(--line);
-    display:flex;flex-direction:column;gap:1vh;
-    padding:7vh 1vw 2vh;   /* padding superior deixa livre a área do "sincronizado" */
-  }
-  #colunaSenhas h2{
-    font-size:clamp(10px,1.7vh,16px);letter-spacing:.25em;text-transform:uppercase;
-    color:var(--dim);font-weight:700;text-align:center;
-  }
-  #colunaSenhas .hist-item{font-size:clamp(14px,3.2vh,36px)}
-  #barraPainel{
-    background:var(--panel);border-top:2px solid var(--line);
-    padding:10px 14px;display:flex;flex-wrap:wrap;gap:10px;align-items:center;justify-content:center;
-  }
-  #barraPainel.oculta{display:none}
-  #ativarPainel{
-    position:absolute;inset:0;background:rgba(11,18,32,.96);z-index:10;
-    display:flex;flex-direction:column;align-items:center;justify-content:center;gap:16px;
-  }
-  #inputSlides{display:none}
-  #infoSlides{font-weight:700;color:var(--dim);font-size:14px}
-  #infoSlides b{color:var(--ink)}
+  body{background:var(--bg);color:var(--texto);font-family:"Segoe UI",system-ui,Arial,sans-serif;min-height:100vh}
+  button{font-family:inherit;cursor:pointer;border:none;border-radius:10px}
+  .oculto{display:none !important}
+
+  /* ---------- Home ---------- */
+  #telaHome{min-height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:28px;padding:24px}
+  #telaHome h1{font-size:1.7rem;font-weight:600;letter-spacing:.02em}
+  #telaHome p{color:var(--suave)}
+  .cartoes{display:flex;gap:18px;flex-wrap:wrap;justify-content:center}
+  .cartao{background:var(--panel);border:1px solid var(--borda);border-radius:14px;padding:28px 26px;width:230px;
+    color:var(--texto);text-align:left;display:flex;flex-direction:column;gap:8px;transition:border-color .15s, transform .15s}
+  .cartao:hover{border-color:var(--azul);transform:translateY(-2px)}
+  .cartao .ic{font-size:1.9rem}
+  .cartao b{font-size:1.05rem}
+  .cartao span{color:var(--suave);font-size:.85rem;line-height:1.35}
+
+  /* ---------- Atendente ---------- */
+  #telaGuiche, #telaAtendente{min-height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:22px;padding:24px}
+  #telaGuiche h2{font-weight:600}
+  .gradeGuiches{display:grid;grid-template-columns:repeat(5,74px);gap:12px}
+  .gradeGuiches button{height:64px;font-size:1.3rem;font-weight:700;background:var(--panel2);color:var(--texto);border:1px solid var(--borda)}
+  .gradeGuiches button:hover{border-color:var(--azul);background:#223350}
+  .linkVoltar{background:none;color:var(--suave);text-decoration:underline;font-size:.9rem}
+
+  #telaAtendente{gap:16px}
+  #cabAtend{display:flex;align-items:center;gap:12px;color:var(--suave)}
+  #cabAtend b{color:var(--texto);font-size:1.2rem}
+  #ultimaAtend{background:var(--panel);border:1px solid var(--borda);border-radius:14px;padding:18px 40px;text-align:center;min-width:280px}
+  #ultimaAtend .rot{color:var(--suave);font-size:.8rem;text-transform:uppercase;letter-spacing:.1em}
+  #ultimaAtend .num{font-size:4.2rem;font-weight:800;line-height:1.1}
+  #ultimaAtend .tag{font-size:.85rem;font-weight:700;letter-spacing:.06em}
+  .tagPri{color:var(--ambar)} .tagCom{color:var(--azul)}
+  .botoesChamar{display:flex;gap:14px;flex-wrap:wrap;justify-content:center}
+  .btnGrande{padding:26px 34px;font-size:1.25rem;font-weight:700;color:#fff;min-width:230px;
+    display:flex;flex-direction:column;gap:6px;align-items:center}
+  .btnGrande small{font-weight:500;font-size:.8rem;opacity:.85}
+  #btnPrioridade{background:linear-gradient(180deg,var(--ambar),var(--ambar2))}
+  #btnComum{background:linear-gradient(180deg,var(--azul),var(--azul2))}
+  .btnGrande:disabled{opacity:.4;cursor:not-allowed}
+  #btnRepetir{background:var(--panel2);color:var(--texto);border:1px solid var(--borda);padding:12px 26px;font-size:1rem}
+  #avisoAtend{min-height:22px;color:var(--vermelho);font-weight:600}
+
+  /* ---------- Painel (projetor) ---------- */
+  #telaPainel{position:fixed;inset:0;background:#000;overflow:hidden}
+  #areaSlides{position:absolute;inset:0;display:flex;align-items:center;justify-content:center}
+  #areaSlides img{max-width:100%;max-height:100%;object-fit:contain}
+  #marcaOcioso{color:#22344f;font-size:2rem;font-weight:600;letter-spacing:.05em;text-align:center}
+
+  #colunaHist{position:absolute;top:0;right:0;bottom:0;width:220px;background:rgba(10,16,26,.88);
+    border-left:1px solid var(--borda);display:flex;flex-direction:column;gap:10px;padding:16px 14px;z-index:5}
+  #colunaHist h3{color:var(--suave);font-size:.75rem;text-transform:uppercase;letter-spacing:.12em;text-align:center}
+  .itemHist{background:var(--panel);border:1px solid var(--borda);border-radius:10px;padding:10px;text-align:center}
+  .itemHist .n{font-size:2rem;font-weight:800}
+  .itemHist .g{color:var(--suave);font-size:.8rem}
+  .itemHist.pri .n{color:var(--ambar)}
+
+  #overlayChamada{position:absolute;inset:0;right:220px;background:rgba(5,10,18,.96);z-index:8;
+    display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px}
+  #overlayChamada .rot{font-size:2.2vw;color:var(--suave);text-transform:uppercase;letter-spacing:.25em}
+  #overlayChamada .tag{font-size:3vw;font-weight:800;letter-spacing:.1em}
+  #overlayChamada .num{font-size:22vw;font-weight:900;line-height:1;animation:pulsa 1s ease-in-out infinite alternate}
+  #overlayChamada .gui{font-size:5vw;font-weight:700;color:var(--texto);margin-top:1vw}
+  @keyframes pulsa{from{transform:scale(1)}to{transform:scale(1.05)}}
+
+  #barraPainel{position:absolute;top:0;left:0;right:220px;z-index:10;background:rgba(13,20,32,.95);
+    border-bottom:1px solid var(--borda);display:flex;gap:10px;align-items:center;padding:10px 14px;flex-wrap:wrap;
+    transform:translateY(-110%);transition:transform .25s}
+  #barraPainel.visivel{transform:translateY(0)}
+  #barraPainel button,#barraPainel select,#barraPainel input,#barraPainel label{font-size:.85rem}
+  #barraPainel button{background:var(--panel2);color:var(--texto);border:1px solid var(--borda);padding:8px 12px;border-radius:8px}
+  #barraPainel select{background:var(--panel2);color:var(--texto);border:1px solid var(--borda);padding:7px;border-radius:8px}
+  #barraPainel .sep{width:1px;height:24px;background:var(--borda)}
+  #barraPainel label{color:var(--suave);display:flex;align-items:center;gap:6px}
+
+  /* ---------- Admin ---------- */
+  #telaAdmin{min-height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:20px;padding:24px}
+  .caixaAdmin{background:var(--panel);border:1px solid var(--borda);border-radius:14px;padding:26px;min-width:320px;
+    display:flex;flex-direction:column;gap:16px}
+  .caixaAdmin h2{font-weight:600;font-size:1.15rem}
+  .linhaStat{display:flex;justify-content:space-between;color:var(--suave)}
+  .linhaStat b{color:var(--texto)}
+  #btnReset{background:var(--vermelho);color:#fff;padding:14px;font-size:1rem;font-weight:700}
+  #pinCampo{background:var(--panel2);border:1px solid var(--borda);border-radius:8px;color:var(--texto);
+    padding:11px;font-size:1rem;width:100%;text-align:center;letter-spacing:.3em}
+  #msgAdmin{min-height:20px;font-size:.9rem;text-align:center}
 </style>
 </head>
 <body>
 
-<div class="status-sync" id="statusSync" style="display:none"><div class="dot"></div><span id="statusSyncTxt">conectando…</span></div>
-
-<!-- ============ INÍCIO ============ -->
-<div class="tela ativa" id="telaInicio">
-  <h1>Chamador de Senhas</h1>
-  <button class="btn enorme" onclick="irPara('atendente')">🧑‍💼 Sou atendente<small>Chamar a próxima senha do meu guichê</small></button>
-  <button class="btn enorme" onclick="irPara('painel')">🖥️ Painel do projetor<small>Tela grande com senha, voz e slides</small></button>
-  <button class="btn enorme fantasma" onclick="irPara('admin')">⚙️ Administração<small>Emitir senhas e zerar o dia</small></button>
-</div>
-
-<!-- ============ ESCOLHA DO GUICHÊ ============ -->
-<div class="tela" id="telaGuiche">
-  <button class="btn fantasma voltar" onclick="irPara('inicio')">← Início</button>
-  <h1>Qual é o seu guichê?</h1>
-  <div class="cartao" style="max-width:420px">
-    <input type="number" id="inputGuiche" min="1" max="99" value="1"
-      style="font-size:42px;width:140px;text-align:center"
-      onkeydown="if(event.key==='Enter')confirmarGuiche()">
-    <button class="btn enorme play" onclick="confirmarGuiche()">Confirmar guichê</button>
+<!-- ===================== HOME ===================== -->
+<div id="telaHome">
+  <div style="text-align:center">
+    <h1>Chamador de Senhas</h1>
+    <p>Senhas físicas de 1 a 150 &nbsp;·&nbsp; 1 a 20 prioridade &nbsp;·&nbsp; 21 a 150 comum</p>
+  </div>
+  <div class="cartoes">
+    <button class="cartao" onclick="irPara('guiche')">
+      <span class="ic">🧑‍💼</span><b>Atendente</b>
+      <span>Chamar a próxima senha prioritária ou comum a partir do guichê</span>
+    </button>
+    <button class="cartao" onclick="irPara('painel')">
+      <span class="ic">📺</span><b>Painel</b>
+      <span>Tela do projetor com voz, som de aviso e slides</span>
+    </button>
+    <button class="cartao" onclick="irPara('admin')">
+      <span class="ic">⚙️</span><b>Administração</b>
+      <span>Reiniciar o ciclo de senhas para o próximo dia</span>
+    </button>
   </div>
 </div>
 
-<!-- ============ ATENDENTE ============ -->
-<div class="tela" id="telaAtendente">
-  <button class="btn fantasma voltar" onclick="irPara('inicio')">← Início</button>
-  <h1>Atendente — Guichê <span id="tituloGuiche">?</span></h1>
-  <div class="cartao">
-    <span class="fila-info">Meu guichê: <b id="meuGuicheTxt">-</b></span>
-    <button class="btn fantasma" onclick="irPara('guiche')">Trocar guichê</button>
-  </div>
-  <div id="ultChamada">
-    <div class="rotulo">Última senha chamada</div>
-    <div id="ultCod">— — —</div>
-    <div id="ultGuiche">Guichê <b id="ultG">-</b></div>
-  </div>
-  <div class="cartao">
-    <button class="btn enorme p" id="btnChP" onclick="chamarProxima('P')">📢 Chamar próxima Prioridade</button>
-    <button class="btn enorme c" id="btnChC" onclick="chamarProxima('C')">📢 Chamar próxima Comum</button>
-    <button class="btn enorme" onclick="repetirMinha()">🔁 Repetir minha última</button>
-  </div>
-  <span class="fila-info">Aguardando — Prioridade: <b id="filaPA">0</b> · Comum: <b id="filaCA">0</b></span>
+<!-- ===================== ESCOLHA DE GUICHÊ ===================== -->
+<div id="telaGuiche" class="oculto">
+  <h2>Qual é o seu guichê?</h2>
+  <div class="gradeGuiches" id="gradeGuiches"></div>
+  <button class="linkVoltar" onclick="irPara('home')">Voltar</button>
 </div>
 
-<!-- ============ ADMIN ============ -->
-<div class="tela" id="telaAdmin">
-  <button class="btn fantasma voltar" onclick="irPara('inicio')">← Início</button>
-  <h1>Administração</h1>
-  <div class="cartao">
-    <h3>Emissão de senhas (recepção)</h3>
-    <button class="btn p" onclick="emitir('P')">+ Emitir Prioridade</button>
-    <button class="btn c" onclick="emitir('C')">+ Emitir Comum</button>
-    <span class="fila-info">Fila P: <b id="filaPAd">0</b> · Fila C: <b id="filaCAd">0</b></span>
-    <span class="aviso">Última emitida — P: <b id="emitPAd">000</b> · C: <b id="emitCAd">000</b></span>
+<!-- ===================== ATENDENTE ===================== -->
+<div id="telaAtendente" class="oculto">
+  <div id="cabAtend">Guichê <b id="rotGuiche">1</b>
+    <button class="linkVoltar" onclick="irPara('guiche')">trocar</button>
   </div>
-  <div class="cartao">
-    <h3>Manutenção</h3>
-    <button class="btn stop" onclick="zerar()">Zerar dia (senhas e histórico)</button>
+
+  <div id="ultimaAtend">
+    <div class="rot">Última senha chamada por você</div>
+    <div class="num" id="numAtend">—</div>
+    <div class="tag" id="tagAtend">&nbsp;</div>
   </div>
+
+  <div class="botoesChamar">
+    <button class="btnGrande" id="btnPrioridade" onclick="chamar('prioridade')">
+      Chamar prioridade
+      <small id="restPri">senhas 1 a 20</small>
+    </button>
+    <button class="btnGrande" id="btnComum" onclick="chamar('comum')">
+      Chamar comum
+      <small id="restCom">senhas 21 a 150</small>
+    </button>
+  </div>
+
+  <button id="btnRepetir" onclick="repetir()">🔁 Repetir última chamada</button>
+  <div id="avisoAtend"></div>
+  <button class="linkVoltar" onclick="irPara('home')">Início</button>
 </div>
 
-<!-- ============ PAINEL ============ -->
-<div class="tela" id="telaPainel">
-  <div id="painelConteudo">
-    <div id="ativarPainel">
-      <h1>Painel do projetor</h1>
-      <button class="btn enorme play" onclick="ativarPainel()">▶ Ativar painel e som</button>
-      <span class="aviso">Este clique é necessário para o navegador liberar o áudio da chamada.</span>
-    </div>
-    <div id="telaChamada">
-      <div id="principal">
-        <div id="relogio">--:--</div>
-        <div id="tipoChamada">Aguardando chamada</div>
-        <div id="senhaAtual">— — —</div>
-        <div id="guicheLinha">Guichê <b id="guicheNum">-</b></div>
-      </div>
-      <aside id="historico">
-        <h2>Últimas chamadas</h2>
-        <div id="listaHist"><div id="vazio">Nenhuma senha chamada ainda.</div></div>
-      </aside>
-    </div>
-    <div id="telaSlides">
-      <img id="slideImg" alt="Slide">
-      <aside id="colunaSenhas" style="display:none">
-        <h2>Últimas senhas</h2>
-        <div id="listaSlides"></div>
-      </aside>
-    </div>
+<!-- ===================== PAINEL ===================== -->
+<div id="telaPainel" class="oculto">
+  <div id="areaSlides"><div id="marcaOcioso">Aguardando chamadas…</div></div>
+
+  <div id="colunaHist">
+    <h3>Últimas senhas</h3>
+    <div id="listaHist"></div>
   </div>
+
+  <div id="overlayChamada" class="oculto">
+    <div class="rot">Senha</div>
+    <div class="tag" id="ovTag"></div>
+    <div class="num" id="ovNum">—</div>
+    <div class="gui" id="ovGui"></div>
+  </div>
+
   <div id="barraPainel">
-    <button class="btn fantasma" onclick="irPara('inicio')">← Início</button>
-    <button class="btn fantasma" onclick="document.getElementById('inputSlides').click()">📂 Slides (PDF/imagens)</button>
-    <input type="file" id="inputSlides" accept="application/pdf,image/*" multiple onchange="carregarSlides(this.files)">
-    <span id="infoSlides">Nenhum slide</span>
-    <label class="mini">Seg./slide</label><input type="number" id="segSlide" min="2" max="120" value="8">
-    <label class="mini">Seg. senha</label><input type="number" id="segChamada" min="3" max="60" value="12">
-    <button class="btn play" id="btnPlay" onclick="alternarApresentacao()" disabled>▶ Slides</button>
-    <label class="mini">Som</label>
-    <select id="somSel">
-      <option value="alerta" selected>Alerta (3 tons)</option>
-      <option value="gongo">Gongo forte</option>
-      <option value="suave">Suave (original)</option>
-    </select>
-    <button class="btn fantasma" onclick="campainha()">🔊 Testar</button>
-    <label class="mini">Voz</label><select id="voz"></select>
-    <button class="btn fantasma" onclick="telaCheia()">⛶ Tela cheia (F)</button>
-    <button class="btn fantasma" onclick="alternarBarra()">▼ Ocultar barra (H)</button>
+    <button onclick="telaCheia()">⛶ Tela cheia</button>
+    <span class="sep"></span>
+    <label>Som
+      <select id="selSom">
+        <option value="dingdong">Ding-dong</option>
+        <option value="sino">Sino</option>
+        <option value="trinado">Trinado</option>
+      </select>
+    </label>
+    <button onclick="tocarSom()">▶ Testar</button>
+    <label><input type="checkbox" id="chkVoz" checked> Voz</label>
+    <span class="sep"></span>
+    <label>Slides
+      <input type="file" id="arqSlides" accept="image/*,application/pdf" multiple>
+    </label>
+    <label>Intervalo
+      <select id="selIntervalo">
+        <option value="5">5 s</option>
+        <option value="8" selected>8 s</option>
+        <option value="12">12 s</option>
+        <option value="20">20 s</option>
+      </select>
+    </label>
+    <button id="btnSlides" onclick="alternarSlides()">▶ Iniciar slides</button>
+    <span class="sep"></span>
+    <button onclick="irPara('home')">✕ Sair</button>
   </div>
+</div>
+
+<!-- ===================== ADMIN ===================== -->
+<div id="telaAdmin" class="oculto">
+  <div class="caixaAdmin">
+    <h2>⚙️ Administração</h2>
+    <div class="linhaStat">Prioridade (1–20)<b id="stPri">—</b></div>
+    <div class="linhaStat">Comum (21–150)<b id="stCom">—</b></div>
+    <input type="password" id="pinCampo" class="oculto" placeholder="PIN" inputmode="numeric">
+    <button id="btnReset" onclick="resetar()">Reiniciar ciclo de senhas</button>
+    <div id="msgAdmin"></div>
+  </div>
+  <button class="linkVoltar" onclick="irPara('home')">Início</button>
 </div>
 
 <script>
-if(window.pdfjsLib){
-  pdfjsLib.GlobalWorkerOptions.workerSrc =
-    'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+/* ================================================================
+   NAVEGAÇÃO
+================================================================ */
+const telas = ['home','guiche','atendente','painel','admin'];
+let guiche = localStorage.getItem('guiche') || '';
+let pinNecessario = false;
+
+function irPara(t){
+  telas.forEach(x => document.getElementById('tela' + x[0].toUpperCase() + x.slice(1)).classList.add('oculto'));
+  document.getElementById('tela' + t[0].toUpperCase() + t.slice(1)).classList.remove('oculto');
+  location.hash = t === 'home' ? '' : t;
+  if (t === 'atendente') iniciarAtendente();
+  if (t === 'painel') iniciarPainel(); else pararPainel();
+  if (t === 'admin') atualizarAdmin();
 }
 
-/* ============ API ============ */
-const API = '/api/estado';
-let cache = { emitP:0, emitC:0, chamP:0, chamC:0, hist:[], ultima:null };
-let ultimoTs = 0;
-let minhaUltima = null;
-const $ = id => document.getElementById(id);
-
-async function lerEstado(){
-  try{
-    const r = await fetch(API, {cache:'no-store'});
-    if(!r.ok) throw new Error('HTTP '+r.status);
-    cache = await r.json();
-    marcarSync(true);
-    return cache;
-  }catch(e){ marcarSync(false); return cache; }
-}
-async function acao(payload){
-  try{
-    const r = await fetch(API, {
-      method:'POST',
-      headers:{'Content-Type':'application/json'},
-      body:JSON.stringify(payload)
-    });
-    const dados = await r.json();
-    if(!r.ok){ marcarSync(true); return {ok:false, erro:dados.erro||('HTTP '+r.status)}; }
-    marcarSync(true);
-    if(dados.estado) cache = dados.estado;
-    return {ok:true, ...dados};
-  }catch(e){ marcarSync(false); return {ok:false, erro:'sem conexão'}; }
-}
-function marcarSync(ok){
-  const s=$('statusSync');
-  s.classList.toggle('ok',ok);
-  $('statusSyncTxt').textContent = ok?'sincronizado':'sem conexão';
-}
-
-/* ============ NAVEGAÇÃO ============ */
-let modo='inicio';
-let pollTimer=null;
-let meuGuicheNum=null;   // definido na tela "Qual é o seu guichê?"
-function irPara(novoModo){
-  // atendente sempre passa antes pela escolha do guichê
-  if(novoModo==='atendente' && meuGuicheNum===null) novoModo='guiche';
-  modo=novoModo;
-  document.querySelectorAll('.tela').forEach(t=>t.classList.remove('ativa'));
-  const mapa={inicio:'telaInicio',guiche:'telaGuiche',atendente:'telaAtendente',admin:'telaAdmin',painel:'telaPainel'};
-  $(mapa[novoModo]).classList.add('ativa');
-  $('statusSync').style.display = (novoModo==='inicio'||novoModo==='guiche')?'none':'flex';
-  clearInterval(pollTimer);
-  if(novoModo==='guiche'){ setTimeout(()=>$('inputGuiche').select(),100); }
-  if(novoModo==='atendente'){ atualizarAtendente(); pollTimer=setInterval(atualizarAtendente,4000); }
-  if(novoModo==='admin'){ atualizarAdmin(); pollTimer=setInterval(atualizarAdmin,4000); }
-  if(novoModo==='painel' && painelAtivo){ pollTimer=setInterval(pollPainel,2000); }
-}
-function confirmarGuiche(){
-  const n = parseInt($('inputGuiche').value);
-  if(!n || n<1 || n>99){ alert('Informe um número de guichê entre 1 e 99.'); return; }
-  meuGuicheNum = n;
-  $('tituloGuiche').textContent = n;
-  $('meuGuicheTxt').textContent = n;
-  irPara('atendente');
-}
-
-/* ============ ATENDENTE ============ */
-async function chamarProxima(tipo){
-  $('btnChP').disabled = $('btnChC').disabled = true;
-  const r = await acao({action:'chamar', tipo, guiche: meuGuicheNum||1});
-  if(r.ok){
-    minhaUltima = r.chamada;
-    mostrarUltAtendente(r.chamada);
-    atualizarFilasAtendente(cache);
-  } else {
-    alert('Não consegui registrar a chamada ('+r.erro+'). Tente de novo.');
+(function montarGuiches(){
+  const g = document.getElementById('gradeGuiches');
+  for (let i = 1; i <= 10; i++){
+    const b = document.createElement('button');
+    b.textContent = i;
+    b.onclick = () => { guiche = String(i); localStorage.setItem('guiche', guiche); irPara('atendente'); };
+    g.appendChild(b);
   }
-  $('btnChP').disabled = $('btnChC').disabled = false;
+})();
+
+/* ================================================================
+   API
+================================================================ */
+async function api(metodo, corpo){
+  const r = await fetch('/api/estado', {
+    method: metodo,
+    headers: { 'Content-Type': 'application/json' },
+    body: corpo ? JSON.stringify(corpo) : undefined,
+  });
+  return r.json();
 }
-async function repetirMinha(){
-  if(!minhaUltima){ alert('Você ainda não chamou nenhuma senha nesta sessão.'); return; }
-  const r = await acao({action:'repetir', chamada: minhaUltima});
-  if(r.ok) mostrarUltAtendente(r.chamada);
+
+/* ================================================================
+   ATENDENTE
+================================================================ */
+let pollAtend = null;
+
+function iniciarAtendente(){
+  document.getElementById('rotGuiche').textContent = guiche || '?';
+  atualizarAtendente();
+  clearInterval(pollAtend);
+  pollAtend = setInterval(atualizarAtendente, 4000);
 }
+
 async function atualizarAtendente(){
-  const e = await lerEstado();
-  if(e.ultima) mostrarUltAtendente(e.ultima);
-  atualizarFilasAtendente(e);
-}
-function mostrarUltAtendente(ch){
-  $('ultCod').textContent = ch.tipo+String(ch.num).padStart(3,'0');
-  $('ultCod').className = ch.tipo==='P'?'prior':'comum';
-  $('ultG').textContent = ch.guiche;
-}
-function atualizarFilasAtendente(e){
-  $('filaPA').textContent = Math.max(0,e.emitP-e.chamP);
-  $('filaCA').textContent = Math.max(0,e.emitC-e.chamC);
-}
+  try{
+    const e = await api('GET');
+    pinNecessario = e.pinNecessario;
+    const restPri = e.limites.maxPrioridade - e.prioridade;
+    const restCom = e.limites.maxComum - e.comum;
+    document.getElementById('restPri').textContent =
+      restPri > 0 ? `última: ${e.prioridade || '—'} · restam ${restPri}` : 'esgotadas';
+    document.getElementById('restCom').textContent =
+      restCom > 0 ? `última: ${e.comum > 20 ? e.comum : '—'} · restam ${restCom}` : 'esgotadas';
+    document.getElementById('btnPrioridade').disabled = restPri <= 0;
+    document.getElementById('btnComum').disabled = restCom <= 0;
 
-/* ============ ADMIN ============ */
-async function emitir(tipo){
-  await acao({action:'emitir', tipo});
-  atualizarAdmin();
-}
-async function atualizarAdmin(){
-  const e = await lerEstado();
-  $('filaPAd').textContent = Math.max(0,e.emitP-e.chamP);
-  $('filaCAd').textContent = Math.max(0,e.emitC-e.chamC);
-  $('emitPAd').textContent = String(e.emitP).padStart(3,'0');
-  $('emitCAd').textContent = String(e.emitC).padStart(3,'0');
-}
-async function zerar(){
-  if(!confirm('Zerar TODAS as senhas e o histórico para todos os guichês?')) return;
-  // tenta sem PIN; só pergunta se o servidor exigir
-  let r = await acao({action:'zerar'});
-  if(!r.ok && String(r.erro).toLowerCase().includes('pin')){
-    const pin = prompt('Este painel exige PIN de administração:');
-    if(pin===null) return;
-    r = await acao({action:'zerar', pin});
-  }
-  if(!r.ok){ alert('Não foi possível zerar: '+r.erro); return; }
-  ultimoTs = 0; minhaUltima = null;
-  atualizarAdmin();
-}
-
-/* ============ PAINEL ============ */
-let painelAtivo=false;
-const show = { slides:[], idx:0, rodando:false, timerSlide:null, timerVolta:null };
-
-setInterval(()=>{
-  const r=$('relogio');
-  if(r) r.textContent = new Date().toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'});
-},1000);
-
-function ativarPainel(){
-  painelAtivo=true;
-  $('ativarPainel').style.display='none';
-  $('barraPainel').classList.add('oculta');   // projetor começa limpo; mexa o mouse p/ ver a barra
-  audioCtx = audioCtx || new (window.AudioContext||window.webkitAudioContext)();
-  lerEstado().then(e=>{
-    if(e.ultima){ ultimoTs = e.ultima.ts||0; desenharChamada(e.ultima,false); }
-  });
-  clearInterval(pollTimer);
-  pollTimer=setInterval(pollPainel,2000);
-}
-async function pollPainel(){
-  if(modo!=='painel'||!painelAtivo) return;
-  const e = await lerEstado();
-  // coleta TODAS as chamadas novas (histórico + última), não só a mais recente
-  const novos=[]; const vistos=new Set();
-  const add = c => {
-    if(c && (c.ts||0)>ultimoTs && !vistos.has(c.ts)){ vistos.add(c.ts); novos.push(c); }
-  };
-  (e.hist||[]).forEach(add);
-  add(e.ultima);
-  if(novos.length){
-    novos.sort((a,b)=>a.ts-b.ts);          // anuncia em ordem de chegada
-    ultimoTs = novos[novos.length-1].ts;
-    filaAnuncios.push(...novos);
-    processarAnuncios();
-  } else if(!e.ultima && ultimoTs>0){
-    ultimoTs=0;
-    $('senhaAtual').textContent='— — —'; $('senhaAtual').className='';
-    $('tipoChamada').textContent='Aguardando chamada'; $('tipoChamada').className='';
-    $('listaHist').innerHTML='<div id="vazio">Nenhuma senha chamada ainda.</div>';
-    $('colunaSenhas').style.display='none';
-  }
-}
-// fila de anúncios: cada chamada tem seu momento de tela + som + voz
-let filaAnuncios=[], anunciando=false;
-function processarAnuncios(){
-  if(anunciando) return;
-  const ch = filaAnuncios.shift();
-  if(!ch) return;
-  anunciando=true;
-  anunciarNoPainel(ch);
-  const som=($('somSel')&&$('somSel').value)||'alerta';
-  const durSom = som==='gongo'?2200 : som==='alerta'?1700 : 900;
-  // reserva tempo para o som + a fala antes do próximo anúncio da fila
-  setTimeout(()=>{ anunciando=false; processarAnuncios(); }, durSom + 5000);
-}
-function anunciarNoPainel(ch){
-  interromperSlides();
-  desenharChamada(ch,true);
-  campainha();
-  falar(`Senha ${ch.tipo==='P'?'pê':'cê'}, ${soletrar(ch.num)}. Guichê ${ch.guiche}.`);
-}
-function desenharChamada(ch,animar){
-  const cod = ch.tipo+String(ch.num).padStart(3,'0');
-  const el = $('senhaAtual');
-  el.textContent = cod;
-  el.className = ch.tipo==='P'?'prior':'comum';
-  if(animar){ el.classList.remove('piscando'); void el.offsetWidth; el.classList.add('piscando'); }
-  const tag = $('tipoChamada');
-  tag.textContent = ch.tipo==='P'?'Atendimento prioritário':'Atendimento comum';
-  tag.className = ch.tipo==='P'?'prior':'comum';
-  $('guicheNum').textContent = ch.guiche;
-  const l=$('listaHist'); l.innerHTML='';
-  (cache.hist||[]).forEach(h=>{
-    const d=document.createElement('div');
-    d.className='hist-item '+(h.tipo==='P'?'prior':'comum');
-    d.innerHTML = h.tipo+String(h.num).padStart(3,'0')+' <span class="g">G'+h.guiche+'</span>';
-    l.appendChild(d);
-  });
-}
-
-/* --- slides (locais, só no computador do painel) --- */
-async function carregarSlides(files){
-  if(!files||!files.length) return;
-  $('infoSlides').textContent='Processando…';
-  const novos=[];
-  for(const f of files){
-    try{
-      if(f.type==='application/pdf'){
-        const buf=await f.arrayBuffer();
-        const pdf=await pdfjsLib.getDocument({data:buf}).promise;
-        for(let p=1;p<=pdf.numPages;p++){
-          const page=await pdf.getPage(p);
-          let vp=page.getViewport({scale:1});
-          const esc=Math.min(2.5,1920/vp.width);
-          vp=page.getViewport({scale:esc});
-          const cv=document.createElement('canvas');
-          cv.width=vp.width; cv.height=vp.height;
-          await page.render({canvasContext:cv.getContext('2d'),viewport:vp}).promise;
-          novos.push(cv.toDataURL('image/jpeg',0.9));
-        }
-      } else if(f.type.startsWith('image/')){
-        novos.push(await new Promise((res,rej)=>{
-          const r=new FileReader();
-          r.onload=()=>res(r.result); r.onerror=()=>rej(new Error('leitura'));
-          r.readAsDataURL(f);
-        }));
-      }
-    }catch(err){
-      console.error(err);
-      alert('Não consegui ler "'+f.name+'". Verifique se é PDF ou imagem válida.');
+    const minha = (e.historico || []).find(c => String(c.guiche) === String(guiche));
+    if (minha){
+      document.getElementById('numAtend').textContent = minha.senha;
+      const tag = document.getElementById('tagAtend');
+      tag.textContent = minha.tipo === 'prioridade' ? 'PRIORIDADE' : 'COMUM';
+      tag.className = 'tag ' + (minha.tipo === 'prioridade' ? 'tagPri' : 'tagCom');
     }
+  }catch(err){ /* silencioso; tenta no próximo ciclo */ }
+}
+
+async function chamar(tipo){
+  const aviso = document.getElementById('avisoAtend');
+  aviso.textContent = '';
+  try{
+    const r = await api('POST', { acao: 'chamar', tipo, guiche });
+    if (r.esgotado){
+      aviso.textContent = tipo === 'prioridade'
+        ? 'Todas as senhas prioritárias (1–20) já foram chamadas.'
+        : 'Todas as senhas comuns (21–150) já foram chamadas.';
+    }
+    atualizarAtendente();
+  }catch(err){ aviso.textContent = 'Falha de conexão. Tente novamente.'; }
+}
+
+async function repetir(){
+  const aviso = document.getElementById('avisoAtend');
+  aviso.textContent = '';
+  try{
+    const r = await api('POST', { acao: 'repetir', guiche });
+    if (r.erro || r.ok === false) aviso.textContent = r.erro || 'Nada para repetir.';
+  }catch(err){ aviso.textContent = 'Falha de conexão. Tente novamente.'; }
+}
+
+/* ================================================================
+   PAINEL — fila de anúncios, voz, som, slides
+================================================================ */
+let pollPainel = null, ultimoId = null, filaAnuncios = [], anunciando = false;
+let slides = [], idxSlide = 0, timerSlides = null, slidesAtivos = false;
+let ctxAudio = null;
+
+function iniciarPainel(){
+  clearInterval(pollPainel);
+  ultimoId = null; filaAnuncios = []; anunciando = false;
+  cicloPainel();
+  pollPainel = setInterval(cicloPainel, 2500);
+}
+function pararPainel(){
+  clearInterval(pollPainel); pollPainel = null;
+  clearInterval(timerSlides); timerSlides = null; slidesAtivos = false;
+  const b = document.getElementById('btnSlides'); if (b) b.textContent = '▶ Iniciar slides';
+}
+
+async function cicloPainel(){
+  try{
+    const e = await api('GET');
+    const hist = (e.historico || []).slice().sort((a,b) => a.id - b.id); // mais antigo → mais novo
+    if (ultimoId === null){
+      // primeira leitura: não anuncia o passado
+      ultimoId = hist.length ? hist[hist.length - 1].id : 0;
+    } else {
+      for (const c of hist){
+        if (c.id > ultimoId){ filaAnuncios.push(c); ultimoId = c.id; }
+      }
+    }
+    desenharHistorico(hist);
+    processarFila();
+  }catch(err){ /* tenta no próximo ciclo */ }
+}
+
+function desenharHistorico(histAsc){
+  const vistos = new Set(); const itens = [];
+  for (let i = histAsc.length - 1; i >= 0 && itens.length < 3; i--){
+    const c = histAsc[i];
+    const chave = c.senha + '|' + c.guiche;
+    if (!vistos.has(chave)){ vistos.add(chave); itens.push(c); }
   }
-  show.slides=show.slides.concat(novos);
-  const n=show.slides.length;
-  $('infoSlides').innerHTML = n?'<b>'+n+'</b> slide'+(n>1?'s':''):'Nenhum slide';
-  $('btnPlay').disabled=!n;
-  $('inputSlides').value='';
+  document.getElementById('listaHist').innerHTML = itens.map(c => `
+    <div class="itemHist ${c.tipo === 'prioridade' ? 'pri' : ''}">
+      <div class="n">${c.senha}</div>
+      <div class="g">Guichê ${c.guiche}</div>
+    </div>`).join('');
 }
-function alternarApresentacao(){ show.rodando?pararApresentacao():iniciarApresentacao(); }
-function iniciarApresentacao(){
-  if(!show.slides.length) return;
-  show.rodando=true;
-  $('btnPlay').textContent='⏸ Parar';
-  $('btnPlay').classList.replace('play','stop');
-  mostrarSlideAtual(); agendarTrocaSlide();
+
+function processarFila(){
+  if (anunciando || filaAnuncios.length === 0) return;
+  anunciando = true;
+  const c = filaAnuncios.shift();
+
+  document.getElementById('ovNum').textContent = c.senha;
+  document.getElementById('ovGui').textContent = 'Guichê ' + c.guiche;
+  const tag = document.getElementById('ovTag');
+  const pri = c.tipo === 'prioridade';
+  tag.textContent = pri ? 'PRIORIDADE' : '';
+  tag.style.color = 'var(--ambar)';
+  document.getElementById('overlayChamada').classList.remove('oculto');
+
+  tocarSom();
+  setTimeout(() => falar(c), 700);
+
+  setTimeout(() => {
+    document.getElementById('overlayChamada').classList.add('oculto');
+    anunciando = false;
+    processarFila(); // próxima da fila, se houver — nenhuma chamada é pulada
+  }, 7000);
 }
-function pararApresentacao(){
-  show.rodando=false;
-  clearInterval(show.timerSlide); clearTimeout(show.timerVolta);
-  $('btnPlay').textContent='▶ Slides';
-  $('btnPlay').classList.replace('stop','play');
-  $('telaSlides').style.display='none';
-  $('telaChamada').style.display='flex';
+
+function falar(c){
+  if (!document.getElementById('chkVoz').checked || !('speechSynthesis' in window)) return;
+  const pri = c.tipo === 'prioridade';
+  const texto = `Senha ${pri ? 'prioritária ' : ''}${c.senha}. Guichê ${c.guiche}.`;
+  const u = new SpeechSynthesisUtterance(texto);
+  u.lang = 'pt-BR'; u.rate = 0.95;
+  const voz = speechSynthesis.getVoices().find(v => v.lang && v.lang.startsWith('pt'));
+  if (voz) u.voice = voz;
+  speechSynthesis.cancel();
+  speechSynthesis.speak(u);
 }
-function agendarTrocaSlide(){
-  clearInterval(show.timerSlide);
-  const seg=Math.max(2,parseInt($('segSlide').value)||8);
-  show.timerSlide=setInterval(()=>{
-    show.idx=(show.idx+1)%show.slides.length;
-    mostrarSlideAtual();
-  },seg*1000);
+
+/* ---- Sons (WebAudio, sem arquivos externos) ---- */
+function tocarSom(){
+  if (!ctxAudio) ctxAudio = new (window.AudioContext || window.webkitAudioContext)();
+  if (ctxAudio.state === 'suspended') ctxAudio.resume();
+  const tipo = document.getElementById('selSom').value;
+  const t0 = ctxAudio.currentTime;
+  const nota = (freq, ini, dur, vol = 0.35) => {
+    const o = ctxAudio.createOscillator(), g = ctxAudio.createGain();
+    o.type = 'sine'; o.frequency.value = freq;
+    g.gain.setValueAtTime(0, t0 + ini);
+    g.gain.linearRampToValueAtTime(vol, t0 + ini + 0.02);
+    g.gain.exponentialRampToValueAtTime(0.001, t0 + ini + dur);
+    o.connect(g); g.connect(ctxAudio.destination);
+    o.start(t0 + ini); o.stop(t0 + ini + dur + 0.05);
+  };
+  if (tipo === 'dingdong'){ nota(830, 0, 0.7); nota(660, 0.45, 0.9); }
+  else if (tipo === 'sino'){ nota(1050, 0, 1.4, 0.4); nota(2100, 0, 0.5, 0.12); }
+  else { nota(600, 0, 0.25); nota(800, 0.22, 0.25); nota(1000, 0.44, 0.5); }
 }
-function mostrarSlideAtual(){
-  if(!show.rodando) return;
-  $('telaChamada').style.display='none';
-  $('telaSlides').style.display='flex';
-  $('slideImg').src=show.slides[show.idx];
-  atualizarColunaSlides();
-}
-function atualizarColunaSlides(){
-  const hist=(cache.hist||[]).slice(0,3);
-  const col=$('colunaSenhas');
-  if(!hist.length){ col.style.display='none'; return; }  // sem chamadas: slide em tela cheia
-  col.style.display='flex';
-  const l=$('listaSlides'); l.innerHTML='';
-  hist.forEach(h=>{
-    const d=document.createElement('div');
-    d.className='hist-item '+(h.tipo==='P'?'prior':'comum');
-    d.innerHTML = h.tipo+String(h.num).padStart(3,'0')+' <span class="g">G'+h.guiche+'</span>';
-    l.appendChild(d);
-  });
-}
-function interromperSlides(){
-  clearTimeout(show.timerVolta);
-  $('telaSlides').style.display='none';
-  $('telaChamada').style.display='flex';
-  if(show.rodando){
-    clearInterval(show.timerSlide);
-    const seg=Math.max(3,parseInt($('segChamada').value)||12);
-    show.timerVolta=setTimeout(()=>{ mostrarSlideAtual(); agendarTrocaSlide(); },seg*1000);
-  }
-}
+
+/* ---- Barra de controle escondida ---- */
+let timerBarra = null;
+document.getElementById('telaPainel').addEventListener('mousemove', () => {
+  const b = document.getElementById('barraPainel');
+  b.classList.add('visivel');
+  clearTimeout(timerBarra);
+  timerBarra = setTimeout(() => b.classList.remove('visivel'), 3000);
+});
+
 function telaCheia(){
-  if(!document.fullscreenElement) document.documentElement.requestFullscreen();
+  const el = document.getElementById('telaPainel');
+  if (!document.fullscreenElement) el.requestFullscreen().catch(()=>{});
   else document.exitFullscreen();
 }
-function alternarBarra(){ $('barraPainel').classList.toggle('oculta'); }
 
-/* --- barra some sozinha no modo painel (estilo player de vídeo) --- */
-let timerBarra=null;
-function esconderBarraDepois(){
-  clearTimeout(timerBarra);
-  timerBarra=setTimeout(()=>{
-    if(modo!=='painel'||!painelAtivo) return;
-    if($('barraPainel').matches(':hover')) { esconderBarraDepois(); return; } // mouse em cima: espera
-    $('barraPainel').classList.add('oculta');
-  },3000);
-}
-document.addEventListener('mousemove',()=>{
-  if(modo!=='painel'||!painelAtivo) return;
-  $('barraPainel').classList.remove('oculta');
-  esconderBarraDepois();
-});
-document.addEventListener('keydown',e=>{
-  if(modo!=='painel') return;
-  if(e.target.tagName==='INPUT'||e.target.tagName==='SELECT') return;
-  const k=e.key.toLowerCase();
-  if(k==='f') telaCheia();
-  if(k==='h') alternarBarra();
+/* ---- Slides: imagens e PDF ---- */
+document.getElementById('arqSlides').addEventListener('change', async ev => {
+  slides = []; idxSlide = 0;
+  for (const f of ev.target.files){
+    if (f.type === 'application/pdf'){
+      try{
+        const buf = await f.arrayBuffer();
+        pdfjsLib.GlobalWorkerOptions.workerSrc =
+          'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+        const pdf = await pdfjsLib.getDocument({ data: buf }).promise;
+        for (let p = 1; p <= pdf.numPages; p++){
+          const pag = await pdf.getPage(p);
+          const vp = pag.getViewport({ scale: 1.6 });
+          const cv = document.createElement('canvas');
+          cv.width = vp.width; cv.height = vp.height;
+          await pag.render({ canvasContext: cv.getContext('2d'), viewport: vp }).promise;
+          slides.push(cv.toDataURL('image/jpeg', 0.85));
+        }
+      }catch(e){ /* PDF inválido: ignora */ }
+    } else if (f.type.startsWith('image/')){
+      slides.push(await new Promise(res => {
+        const r = new FileReader(); r.onload = () => res(r.result); r.readAsDataURL(f);
+      }));
+    }
+  }
+  document.getElementById('btnSlides').textContent =
+    slides.length ? `▶ Iniciar slides (${slides.length})` : '▶ Iniciar slides';
 });
 
-/* ============ SOM / VOZ ============ */
-let vozes=[], audioCtx;
-function carregarVozes(){
-  vozes=speechSynthesis.getVoices();
-  const sel=$('voz'); if(!sel) return;
-  sel.innerHTML='';
-  const pt=vozes.filter(v=>v.lang.toLowerCase().startsWith('pt'));
-  (pt.length?pt:vozes).forEach(v=>{
-    const o=document.createElement('option');
-    o.value=v.name; o.textContent=v.name.replace(/Microsoft |Google /,'')+' ('+v.lang+')';
-    sel.appendChild(o);
-  });
+function alternarSlides(){
+  if (slidesAtivos){
+    slidesAtivos = false; clearInterval(timerSlides);
+    document.getElementById('btnSlides').textContent = '▶ Iniciar slides' + (slides.length ? ` (${slides.length})` : '');
+    document.getElementById('areaSlides').innerHTML = '<div id="marcaOcioso">Aguardando chamadas…</div>';
+    return;
+  }
+  if (!slides.length) return;
+  slidesAtivos = true;
+  document.getElementById('btnSlides').textContent = '⏸ Parar slides';
+  mostrarSlide();
+  timerSlides = setInterval(() => { idxSlide = (idxSlide + 1) % slides.length; mostrarSlide(); },
+    Number(document.getElementById('selIntervalo').value) * 1000);
 }
-speechSynthesis.onvoiceschanged=carregarVozes;
-carregarVozes();
-function tocarNota(f,dt,dur,vol,tipo){
-  const t=audioCtx.currentTime;
-  const o=audioCtx.createOscillator(), g=audioCtx.createGain();
-  o.type=tipo||'sine'; o.frequency.value=f;
-  g.gain.setValueAtTime(0.0001,t+dt);
-  g.gain.exponentialRampToValueAtTime(vol,t+dt+0.015);
-  g.gain.exponentialRampToValueAtTime(0.0001,t+dt+dur);
-  o.connect(g); g.connect(audioCtx.destination);
-  o.start(t+dt); o.stop(t+dt+dur+0.05);
+function mostrarSlide(){
+  document.getElementById('areaSlides').innerHTML = `<img src="${slides[idxSlide]}" alt="">`;
 }
-function campainha(){
-  audioCtx=audioCtx||new (window.AudioContext||window.webkitAudioContext)();
-  const som = ($('somSel')&&$('somSel').value)||'alerta';
-  if(som==='suave'){
-    // ding-dong original
-    tocarNota(880,0,0.6,0.5,'sine');
-    tocarNota(660,0.28,0.6,0.5,'sine');
-  } else if(som==='alerta'){
-    // 3 tons ascendentes, timbre brilhante (estilo aeroporto, bem presente)
-    [[523,0],[659,0.22],[784,0.44]].forEach(([f,dt])=>{
-      tocarNota(f,dt,0.55,0.75,'triangle');
-      tocarNota(f*2,dt,0.35,0.28,'sine');   // harmônico p/ dar brilho
-    });
-    tocarNota(784,0.72,0.9,0.75,'triangle'); // nota final sustentada
-    tocarNota(1568,0.72,0.5,0.25,'sine');
-  } else if(som==='gongo'){
-    // batida grave e forte, com ressonância longa
-    [1,2.02,2.96,4.1].forEach((m,i)=>{
-      tocarNota(196*m,0,2.2-(i*0.3),[0.9,0.5,0.3,0.18][i],'sine');
-    });
-    setTimeout(()=>{ // segunda batida
-      [1,2.02,2.96,4.1].forEach((m,i)=>{
-        tocarNota(262*m,0,2.0-(i*0.3),[0.9,0.5,0.3,0.18][i],'sine');
-      });
-    },450);
+
+/* ================================================================
+   ADMIN
+================================================================ */
+async function atualizarAdmin(){
+  document.getElementById('msgAdmin').textContent = '';
+  try{
+    const e = await api('GET');
+    pinNecessario = e.pinNecessario;
+    document.getElementById('stPri').textContent =
+      `${e.prioridade} de ${e.limites.maxPrioridade} chamadas`;
+    document.getElementById('stCom').textContent =
+      `${Math.max(e.comum - e.limites.baseComum, 0)} de ${e.limites.maxComum - e.limites.baseComum} chamadas`;
+    document.getElementById('pinCampo').classList.toggle('oculto', !pinNecessario);
+  }catch(err){
+    document.getElementById('msgAdmin').textContent = 'Falha ao carregar o estado.';
   }
 }
-function falar(texto){
-  speechSynthesis.cancel();
-  const u=new SpeechSynthesisUtterance(texto);
-  u.lang='pt-BR'; u.rate=0.92;
-  const v=vozes.find(x=>x.name===$('voz').value);
-  if(v) u.voice=v;
-  const som=($('somSel')&&$('somSel').value)||'alerta';
-  const espera = som==='gongo'?2200 : som==='alerta'?1700 : 900;
-  setTimeout(()=>speechSynthesis.speak(u),espera);
+
+async function resetar(){
+  if (!confirm('Reiniciar o ciclo? A prioridade volta para a senha 1 e a comum para a 21.')) return;
+  const msg = document.getElementById('msgAdmin');
+  msg.style.color = '';
+  try{
+    const pin = pinNecessario ? document.getElementById('pinCampo').value : undefined;
+    const r = await api('POST', { acao: 'reset', pin });
+    if (r.erro){ msg.style.color = 'var(--vermelho)'; msg.textContent = r.erro; }
+    else { msg.style.color = 'var(--verde)'; msg.textContent = 'Ciclo reiniciado.'; atualizarAdmin(); }
+  }catch(err){ msg.style.color = 'var(--vermelho)'; msg.textContent = 'Falha de conexão.'; }
 }
-const soletrar = n => String(n).padStart(3,'0').split('').join(', ');
+
+/* ---- Rota inicial por hash ---- */
+(function(){
+  const h = location.hash.replace('#','');
+  if (h === 'atendente' && !guiche) irPara('guiche');
+  else if (telas.includes(h)) irPara(h);
+})();
+if ('speechSynthesis' in window) speechSynthesis.getVoices();
 </script>
 </body>
 </html>
