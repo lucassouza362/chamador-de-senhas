@@ -367,17 +367,35 @@ async function repetir(){
 let pollPainel = null, ultimoId = null, filaAnuncios = [], anunciando = false;
 let slides = [], idxSlide = 0, timerSlides = null, slidesAtivos = false;
 let ctxAudio = null;
+let wakeLock = null;
+
+/* ---- Mantém a tela acesa enquanto o painel está aberto ---- */
+async function pedirWakeLock(){
+  if (!('wakeLock' in navigator)) return;   // navegador sem suporte: segue normal
+  try{
+    wakeLock = await navigator.wakeLock.request('screen');
+  }catch(e){ /* sem permissão/energia crítica: segue normal */ }
+}
+function soltarWakeLock(){
+  if (wakeLock){ wakeLock.release().catch(()=>{}); wakeLock = null; }
+}
+// o navegador solta o wake lock se a aba sair de foco; ao voltar, pedimos de novo
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'visible' && pollPainel) pedirWakeLock();
+});
 
 function iniciarPainel(){
   clearInterval(pollPainel);
   ultimoId = null; filaAnuncios = []; anunciando = false;
   cicloPainel();
   pollPainel = setInterval(cicloPainel, 2500);
+  pedirWakeLock();
 }
 function pararPainel(){
   clearInterval(pollPainel); pollPainel = null;
   clearInterval(timerSlides); timerSlides = null; slidesAtivos = false;
   const b = document.getElementById('btnSlides'); if (b) b.textContent = '▶ Iniciar slides';
+  soltarWakeLock();
 }
 
 async function cicloPainel(){
