@@ -216,6 +216,10 @@
     </label>
     <button onclick="tocarSom()">▶ Testar</button>
     <label><input type="checkbox" id="chkVoz" checked> Voz</label>
+    <label>
+      <select id="selVoz"><option value="">Voz automática (pt)</option></select>
+    </label>
+    <button onclick="testarVoz()">🗣 Testar voz</button>
     <span class="sep"></span>
     <label>Slides
       <input type="file" id="arqSlides" accept="image/*,application/pdf" multiple>
@@ -476,6 +480,45 @@ function processarFila(){
   }, duracao);
 }
 
+function vozEscolhida(){
+  const nome = document.getElementById('selVoz').value;
+  const vozes = speechSynthesis.getVoices();
+  if (nome){
+    const v = vozes.find(x => x.name === nome);
+    if (v) return v;
+  }
+  return vozes.find(v => v.lang && v.lang.startsWith('pt')) || null;
+}
+
+function montarVozes(){
+  const sel = document.getElementById('selVoz');
+  const salva = localStorage.getItem('vozPainel') || '';
+  const vozes = speechSynthesis.getVoices();
+  const pt = vozes.filter(v => v.lang && v.lang.toLowerCase().startsWith('pt'));
+  const outras = vozes.filter(v => !pt.includes(v));
+  sel.innerHTML = '<option value="">Voz automática (pt)</option>' +
+    [...pt, ...outras].map(v =>
+      `<option value="${v.name.replace(/"/g,'&quot;')}">${v.name} (${v.lang})</option>`
+    ).join('');
+  if (salva && [...sel.options].some(o => o.value === salva)) sel.value = salva;
+}
+if ('speechSynthesis' in window){
+  montarVozes();
+  speechSynthesis.onvoiceschanged = montarVozes;  // as vozes carregam com atraso
+  document.getElementById('selVoz').addEventListener('change', ev => {
+    localStorage.setItem('vozPainel', ev.target.value);
+  });
+}
+
+function testarVoz(){
+  const u = new SpeechSynthesisUtterance('Senha 42. Guichê 3.');
+  u.lang = 'pt-BR'; u.rate = 0.95;
+  const v = vozEscolhida();
+  if (v) u.voice = v;
+  speechSynthesis.cancel();
+  speechSynthesis.speak(u);
+}
+
 function falar(c){
   if (!document.getElementById('chkVoz').checked || !('speechSynthesis' in window)) return;
   let texto;
@@ -487,7 +530,7 @@ function falar(c){
   }
   const u = new SpeechSynthesisUtterance(texto);
   u.lang = 'pt-BR'; u.rate = 0.95;
-  const voz = speechSynthesis.getVoices().find(v => v.lang && v.lang.startsWith('pt'));
+  const voz = vozEscolhida();
   if (voz) u.voice = voz;
   speechSynthesis.cancel();
   speechSynthesis.speak(u);
