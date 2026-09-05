@@ -87,7 +87,7 @@
 
   /* ---------- Painel (projetor) ---------- */
   #telaPainel{position:fixed;inset:0;background:#000;overflow:hidden}
-  #areaSlides{position:absolute;top:0;left:0;right:0;bottom:0;display:flex;align-items:center;justify-content:center}
+  #areaSlides{position:absolute;top:0;left:0;right:0;bottom:0;display:flex;align-items:center;justify-content:center;overflow:hidden}
   #telaPainel.comFaixa #areaSlides{bottom:76px}  /* espaço reservado: a faixa nunca cobre o slide */
   #areaSlides img{max-width:100%;max-height:100%;object-fit:contain}
   #marcaOcioso{color:#22344f;font-size:2rem;font-weight:600;letter-spacing:.05em;text-align:center}
@@ -139,6 +139,12 @@
   .linhaCfg label{color:var(--suave);display:flex;align-items:center;gap:8px}
   .linhaCfg .check{color:var(--texto)}
   .linhaCfg input[type=file]{color:var(--suave);font-size:.85rem;max-width:100%}
+  .linhaCfg input[type=range]{flex:1;min-width:140px;accent-color:var(--azul)}
+  .valZoom{font-weight:700;min-width:56px;text-align:center;
+    background:var(--panel2);border:1px solid var(--borda);border-radius:8px;padding:8px 6px;font-size:.9rem}
+  #previaZoom{width:100%;aspect-ratio:16/9;background:#000;border:1px solid var(--borda);
+    border-radius:10px;overflow:hidden;display:flex;align-items:center;justify-content:center}
+  #previaZoom img{max-width:100%;max-height:100%;object-fit:contain;transition:transform .12s}
   .btnVoltarPainel{background:linear-gradient(180deg,var(--azul),var(--azul2)) !important;
     color:#fff !important;border:none !important;font-weight:700;padding:12px 24px !important}
 
@@ -324,6 +330,16 @@
         </select>
       </label>
     </div>
+    <div class="linhaCfg">
+      <label style="flex:1">Zoom
+        <input type="range" id="rngZoom" min="100" max="200" step="5" value="100">
+      </label>
+      <span id="valZoom" class="valZoom">100%</span>
+      <button onclick="zoomPadrao()">Redefinir</button>
+    </div>
+    <div id="previaZoom"><span class="dica">Carregue slides para ver a prévia</span></div>
+    <span class="dica">A prévia mostra como o slide vai aparecer no projetor. Acima de 100% a imagem
+      é ampliada e as bordas ficam de fora — útil quando o slide tem muita margem branca.</span>
     <span class="dica">Os slides ficam gravados neste computador — não precisa carregar de novo amanhã.</span>
   </div>
 
@@ -576,8 +592,12 @@ function abrirConfig(){
   if (intSalvo) document.getElementById('selIntervalo').value = intSalvo;
   document.getElementById('chkAuto').checked = localStorage.getItem('slidesAuto') === '1';
   document.getElementById('chkVoz').checked = localStorage.getItem('vozAtiva') !== '0';
+  const z = zoomAtual();
+  document.getElementById('rngZoom').value = z;
+  document.getElementById('valZoom').textContent = z + '%';
   if (!slides.length) carregarSlidesSalvos(true);   // true = só conta, não inicia
   else atualizarRotuloSlides();
+  desenharPrevia();
   montarVozes();
 }
 
@@ -786,6 +806,11 @@ document.getElementById('selSom').addEventListener('change', ev => {
 document.getElementById('chkVoz').addEventListener('change', ev => {
   localStorage.setItem('vozAtiva', ev.target.checked ? '1' : '0');
 });
+document.getElementById('rngZoom').addEventListener('input', ev => {
+  localStorage.setItem('zoomSlides', ev.target.value);
+  document.getElementById('valZoom').textContent = ev.target.value + '%';
+  aplicarZoom();   // o projetor já mostra a mudança enquanto você arrasta
+});
 
 /* ---- Barra de controle escondida ---- */
 let timerBarra = null;
@@ -843,6 +868,7 @@ function atualizarRotuloSlides(){
   if (b && !slidesAtivos) b.textContent = slides.length ? `▶ Iniciar slides (${slides.length})` : '▶ Iniciar slides';
   const inf = document.getElementById('infoSlidesSalvos');
   if (inf) inf.textContent = slides.length ? `${slides.length} slides salvos` : 'nenhum slide salvo';
+  desenharPrevia();   // mantém a prévia do zoom em dia
 }
 async function limparSlides(){
   if (!confirm('Remover os slides salvos deste computador?')) return;
@@ -898,8 +924,34 @@ function alternarSlides(){
   timerSlides = setInterval(() => { idxSlide = (idxSlide + 1) % slides.length; mostrarSlide(); },
     Number(document.getElementById('selIntervalo').value) * 1000);
 }
+function zoomAtual(){
+  return Number(localStorage.getItem('zoomSlides')) || 100;
+}
+function aplicarZoom(){
+  const esc = zoomAtual() / 100;
+  const img = document.querySelector('#areaSlides img');
+  if (img) img.style.transform = `scale(${esc})`;
+  const prev = document.querySelector('#previaZoom img');
+  if (prev) prev.style.transform = `scale(${esc})`;
+}
+function desenharPrevia(){
+  const cx = document.getElementById('previaZoom');
+  if (!slides.length){
+    cx.innerHTML = '<span class="dica">Carregue slides para ver a prévia</span>';
+    return;
+  }
+  cx.innerHTML = `<img src="${slides[idxSlide] || slides[0]}" alt="" style="transform:scale(${zoomAtual()/100})">`;
+}
+function zoomPadrao(){
+  localStorage.setItem('zoomSlides', 100);
+  document.getElementById('rngZoom').value = 100;
+  document.getElementById('valZoom').textContent = '100%';
+  aplicarZoom();
+}
+
 function mostrarSlide(){
-  document.getElementById('areaSlides').innerHTML = `<img src="${slides[idxSlide]}" alt="">`;
+  document.getElementById('areaSlides').innerHTML =
+    `<img src="${slides[idxSlide]}" alt="" style="transform:scale(${zoomAtual()/100})">`;
 }
 
 /* ================================================================
