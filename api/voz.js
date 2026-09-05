@@ -13,12 +13,17 @@ function descrever(nomeTecnico, genero) {
   const m = /^([a-z]{2})-([A-Z]{2})-(.+?)(Multilingual)?Neural$/.exec(nomeTecnico);
   if (!m) return null;
   const [, idioma, regiao, curto, multi] = m;
-  const nomesRegiao = { BR: 'Brasil', PT: 'Portugal' };
+  const nomesRegiao = {
+    BR: 'Brasil', PT: 'Portugal', US: 'EUA', GB: 'Reino Unido', FR: 'França',
+    DE: 'Alemanha', ES: 'Espanha', IT: 'Itália', JP: 'Japão', CN: 'China',
+    KR: 'Coreia', IN: 'Índia', CA: 'Canadá', AU: 'Austrália', NL: 'Holanda',
+  };
   return {
-    id: curto.toLowerCase(),
+    id: curto.toLowerCase() + (idioma === 'pt' ? '' : '-' + idioma + regiao.toLowerCase()),
     nome: curto,
     tecnico: nomeTecnico,
     regiao: nomesRegiao[regiao] || `${idioma}-${regiao}`,
+    portugues: idioma === 'pt',
     feminina: genero ? genero.toLowerCase() === 'female' : undefined,
     multilingue: Boolean(multi),
   };
@@ -26,23 +31,31 @@ function descrever(nomeTecnico, genero) {
 
 let cacheVozes = null;   // a lista muda raramente; guarda entre chamadas
 
-async function listarVozes() {
-  if (cacheVozes) return cacheVozes;
-  try {
-    const tts = new MsEdgeTTS();
-    const todas = await tts.getVoices();
-    const pt = todas
-      .filter(v => (v.Locale || '').toLowerCase().startsWith('pt'))
-      .map(v => descrever(v.ShortName, v.Gender))
-      .filter(Boolean);
-    if (pt.length) { cacheVozes = pt; return pt; }
-  } catch (e) { /* cai para a reserva */ }
-  return RESERVA.map(n => descrever(n)).filter(Boolean);
+async function listarVozes(incluirMultilingues) {
+  if (!cacheVozes) {
+    try {
+      const tts = new MsEdgeTTS();
+      const todas = await tts.getVoices();
+      cacheVozes = todas
+        .filter(v => {
+          const loc = (v.Locale || '').toLowerCase();
+          // português nativo, ou vozes multilíngues (falam português também)
+          return loc.startsWith('pt') || /MultilingualNeural$/.test(v.ShortName || '');
+        })
+        .map(v => descrever(v.ShortName, v.Gender))
+        .filter(Boolean);
+    } catch (e) {
+      cacheVozes = RESERVA.map(n => descrever(n)).filter(Boolean);
+    }
+  }
+  return incluirMultilingues
+    ? cacheVozes
+    : cacheVozes.filter(v => v.portugues);   // só as nativas em português
 }
 
 // Aceita tanto o apelido ("francisca") quanto o nome técnico completo
 async function resolverVoz(pedida) {
-  const vozes = await listarVozes();
+  const vozes = await listarVozes(true);   // busca em todas, inclusive multilíngues
   const alvo = String(pedida || 'francisca').toLowerCase();
   const achada = vozes.find(v => v.id === alvo || v.tecnico.toLowerCase() === alvo);
   return (achada || vozes.find(v => v.id === 'francisca') || vozes[0]).tecnico;
@@ -53,7 +66,7 @@ export default async function handler(req, res) {
 
   // lista as vozes que o serviço realmente oferece agora
   if (req.method === 'GET' && req.query.listar !== undefined) {
-    const vozes = await listarVozes();
+    const vozes = await listarVozes(req.query.multi !== undefined);
     res.setHeader('Cache-Control', 'public, max-age=86400');
     return res.status(200).json({ vozes });
   }
