@@ -295,12 +295,41 @@
     <h3>🔔 Som de aviso</h3>
     <div class="linhaCfg">
       <select id="selSom">
-        <option value="dingdong">Ding-dong</option>
-        <option value="sino">Sino</option>
-        <option value="trinado">Trinado</option>
+        <optgroup label="Campainhas">
+          <option value="dingdong">Ding-dong</option>
+          <option value="sino">Sino</option>
+          <option value="gongo">Gongo (grave e longo)</option>
+        </optgroup>
+        <optgroup label="Avisos públicos">
+          <option value="aeroporto">Aeroporto (2 tons)</option>
+          <option value="supermercado">Plim-plom</option>
+          <option value="trinado">Trinado (3 notas)</option>
+        </optgroup>
+        <optgroup label="Chamativos">
+          <option value="bipe">Bipe eletrônico</option>
+          <option value="sirene">Sirene curta</option>
+        </optgroup>
+        <optgroup label="Suaves">
+          <option value="xilofone">Xilofone</option>
+          <option value="harpa">Harpa</option>
+        </optgroup>
+        <optgroup label="Personalizado">
+          <option value="proprio">Meu arquivo de som</option>
+        </optgroup>
       </select>
       <button onclick="tocarSom()">▶ Testar som</button>
     </div>
+    <div class="linhaCfg">
+      <label style="flex:1">Volume
+        <input type="range" id="rngVol" min="10" max="100" step="5" value="100">
+      </label>
+      <span id="valVol" class="valZoom">100%</span>
+    </div>
+    <div class="linhaCfg" id="linhaSomProprio" style="display:none">
+      <input type="file" id="arqSom" accept="audio/*">
+      <span id="infoSom" class="dica">nenhum arquivo</span>
+    </div>
+    <span class="dica">Para "Meu arquivo de som", use um MP3 ou WAV curto (2 a 4 segundos).</span>
   </div>
 
   <div class="blocoCfg">
@@ -308,11 +337,44 @@
     <div class="linhaCfg">
       <label class="check"><input type="checkbox" id="chkVoz" checked> Anunciar por voz</label>
     </div>
+
     <div class="linhaCfg">
-      <select id="selVoz"><option value="">Voz automática (pt)</option></select>
-      <button onclick="testarVoz()">🗣 Testar voz</button>
+      <label class="check"><input type="radio" name="fonteVoz" value="internet" id="fonteNet" checked>
+        Voz da internet <b style="color:var(--verde)">(alta qualidade)</b></label>
     </div>
-    <span class="dica">No Edge costumam aparecer as vozes "Natural", mais parecidas com a fala humana.</span>
+    <div class="linhaCfg" id="linhaVozNet">
+      <select id="selVozNet"></select>
+      <button onclick="testarVoz()">🗣 Testar</button>
+    </div>
+    <span class="dica">Vozes neurais brasileiras, iguais em qualquer computador. Precisa de internet;
+      se falhar, o sistema usa automaticamente a voz do computador.</span>
+
+    <div class="linhaCfg">
+      <label class="check"><input type="radio" name="fonteVoz" value="navegador" id="fonteLocal">
+        Voz do computador</label>
+    </div>
+    <div class="linhaCfg" id="linhaVozLocal">
+      <select id="selVoz"><option value="">Voz automática (pt)</option></select>
+      <button onclick="testarVoz()">🗣 Testar</button>
+    </div>
+    <div class="linhaCfg">
+      <label class="check"><input type="checkbox" id="chkTodasVozes" onchange="montarVozes()"> Mostrar vozes de outros idiomas</label>
+    </div>
+    <span id="infoVozes" class="dica"></span>
+
+    <div class="linhaCfg">
+      <label style="flex:1">Velocidade
+        <input type="range" id="rngVel" min="60" max="130" step="5" value="95">
+      </label>
+      <span id="valVel" class="valZoom">0,95</span>
+    </div>
+    <div class="linhaCfg">
+      <label style="flex:1">Tom da voz
+        <input type="range" id="rngTom" min="50" max="150" step="5" value="100">
+      </label>
+      <span id="valTom" class="valZoom">1,00</span>
+    </div>
+    <span id="statusVoz" class="dica" style="min-height:16px"></span>
   </div>
 
   <div class="blocoCfg">
@@ -632,6 +694,25 @@ async function abrirConfig(){
   document.getElementById('chkAuto').checked = localStorage.getItem('slidesAuto') === '1';
   document.getElementById('chkVoz').checked = localStorage.getItem('vozAtiva') !== '0';
 
+  // volume, velocidade e tom
+  const vol = Number(localStorage.getItem('volumeSom')) || 100;
+  document.getElementById('rngVol').value = vol;
+  document.getElementById('valVol').textContent = vol + '%';
+  const vel = Number(localStorage.getItem('velVoz')) || 95;
+  document.getElementById('rngVel').value = vel;
+  document.getElementById('valVel').textContent = (vel / 100).toFixed(2).replace('.', ',');
+  const tom = Number(localStorage.getItem('tomVoz')) || 100;
+  document.getElementById('rngTom').value = tom;
+  document.getElementById('valTom').textContent = (tom / 100).toFixed(2).replace('.', ',');
+  mostrarLinhaSomProprio();
+  carregarSomProprio();
+
+  // fonte da voz
+  const usaNet = vozInternetAtiva();
+  document.getElementById('fonteNet').checked = usaNet;
+  document.getElementById('fonteLocal').checked = !usaNet;
+  aplicarFonteVoz();
+
   // o zoom é compartilhado: busca o valor que está valendo no projetor
   let z = zoomAtual();
   try{
@@ -662,6 +743,7 @@ function iniciarPainel(){
   const somSalvo = localStorage.getItem('somPainel');
   if (somSalvo) document.getElementById('selSom').value = somSalvo;
   document.getElementById('chkVoz').checked = localStorage.getItem('vozAtiva') !== '0';
+  carregarSomProprio();   // o painel precisa do arquivo em memória para tocar
   if (!slides.length) carregarSlidesSalvos();
   else if (!slidesAtivos && localStorage.getItem('slidesAuto') === '1') alternarSlides();
 }
@@ -700,6 +782,7 @@ async function cicloPainel(){
     desenharHistorico(hist);
     processarFila();
     marcarConexao(true);
+    prepararVozes(e);   // deixa os próximos áudios prontos em segundo plano
   }catch(err){
     marcarConexao(false);
     // sem rede: mantém na tela o último histórico conhecido
@@ -788,12 +871,20 @@ function montarVozes(){
   const salva = localStorage.getItem('vozPainel') || '';
   const vozes = speechSynthesis.getVoices();
   const pt = vozes.filter(v => v.lang && v.lang.toLowerCase().startsWith('pt'));
-  const outras = vozes.filter(v => !pt.includes(v));
+  const todas = document.getElementById('chkTodasVozes') && document.getElementById('chkTodasVozes').checked;
+  const lista = todas ? [...pt, ...vozes.filter(v => !pt.includes(v))] : pt;
+
+  const opcao = v => `<option value="${v.name.replace(/"/g,'&quot;')}">${v.name} (${v.lang})</option>`;
   sel.innerHTML = '<option value="">Voz automática (pt)</option>' +
-    [...pt, ...outras].map(v =>
-      `<option value="${v.name.replace(/"/g,'&quot;')}">${v.name} (${v.lang})</option>`
-    ).join('');
-  if (salva && [...sel.options].some(o => o.value === salva)) sel.value = salva;
+    (pt.length ? `<optgroup label="Português (${pt.length})">${pt.map(opcao).join('')}</optgroup>` : '') +
+    (todas && lista.length > pt.length
+      ? `<optgroup label="Outros idiomas">${lista.slice(pt.length).map(opcao).join('')}</optgroup>` : '');
+
+  if (salva && [...sel.querySelectorAll('option')].some(o => o.value === salva)) sel.value = salva;
+  const inf = document.getElementById('infoVozes');
+  if (inf) inf.textContent = pt.length
+    ? `${pt.length} voz(es) em português neste computador`
+    : 'Nenhuma voz em português encontrada — marque "outros idiomas".';
 }
 if ('speechSynthesis' in window){
   montarVozes();
@@ -803,17 +894,92 @@ if ('speechSynthesis' in window){
   });
 }
 
-function testarVoz(){
-  const u = new SpeechSynthesisUtterance('Senha 42.');
-  u.lang = 'pt-BR'; u.rate = 0.95;
-  const v = vozEscolhida();
-  if (v) u.voice = v;
+function velocidadeVoz(){
+  const v = Number(localStorage.getItem('velVoz'));
+  return Number.isFinite(v) && v > 0 ? v / 100 : 0.95;
+}
+function tomVoz(){
+  const v = Number(localStorage.getItem('tomVoz'));
+  return Number.isFinite(v) && v > 0 ? v / 100 : 1;
+}
+
+async function testarVoz(){
+  const st = document.getElementById('statusVoz');
+  if (vozInternetAtiva()){
+    st.textContent = 'gerando áudio…'; st.style.color = 'var(--suave)';
+    try{ await falarPelaInternet('Senha prioritária 42.'); marcarFonteVoz('ok'); return; }
+    catch(e){ marcarFonteVoz('reserva'); }
+  } else marcarFonteVoz('');
+  falarPeloNavegador('Senha prioritária 42.');
+}
+
+/* ================================================================
+   VOZ: internet (alta qualidade) com queda para a do navegador
+================================================================ */
+const vozInternetAtiva = () => localStorage.getItem('fonteVoz') !== 'navegador';
+const vozInternetId    = () => localStorage.getItem('vozInternet') || 'francisca';
+
+// cada frase gerada fica guardada; a mesma senha nunca é baixada duas vezes
+const cacheVoz = new Map();
+
+function urlVoz(texto){
+  const vel = Math.round((velocidadeVoz() - 1) * 100);   // 0,95 → -5%
+  const tom = Math.round((tomVoz() - 1) * 50);           // 1,10 → +5Hz
+  return `/api/voz?texto=${encodeURIComponent(texto)}&voz=${vozInternetId()}` +
+         `&vel=${vel}&tom=${tom}`;
+}
+
+async function falarPelaInternet(texto){
+  const chave = texto + '|' + vozInternetId() + '|' + velocidadeVoz() + '|' + tomVoz();
+  let url = cacheVoz.get(chave);
+  if (!url){
+    const r = await fetch(urlVoz(texto));
+    if (!r.ok) throw new Error('serviço indisponível');
+    const blob = await r.blob();
+    if (!blob.size) throw new Error('áudio vazio');
+    url = URL.createObjectURL(blob);
+    if (cacheVoz.size > 200) cacheVoz.clear();   // evita crescer sem limite
+    cacheVoz.set(chave, url);
+  }
+  const a = new Audio(url);
+  a.volume = volumeSom();
+  await a.play();
+}
+
+function falarPeloNavegador(texto){
+  if (!('speechSynthesis' in window)) return;
+  const u = new SpeechSynthesisUtterance(texto);
+  u.lang = 'pt-BR'; u.rate = velocidadeVoz(); u.pitch = tomVoz();
+  const voz = vozEscolhida();
+  if (voz) u.voice = voz;
   speechSynthesis.cancel();
   speechSynthesis.speak(u);
 }
 
+async function dizer(texto){
+  if (vozInternetAtiva()){
+    try{ await falarPelaInternet(texto); return; }
+    catch(e){
+      marcarFonteVoz('reserva');   // avisa que caiu para a voz local
+    }
+  }
+  falarPeloNavegador(texto);
+}
+
+function marcarFonteVoz(estado){
+  const el = document.getElementById('statusVoz');
+  if (!el) return;
+  if (estado === 'reserva'){
+    el.textContent = '⚠️ voz da internet indisponível — usando a voz do computador';
+    el.style.color = 'var(--ambar)';
+  } else if (estado === 'ok'){
+    el.textContent = '✓ usando voz da internet';
+    el.style.color = 'var(--verde)';
+  } else el.textContent = '';
+}
+
 function falar(c){
-  if (!document.getElementById('chkVoz').checked || !('speechSynthesis' in window)) return;
+  if (!document.getElementById('chkVoz').checked) return;
   let texto;
   if (c.intervalo){
     texto = `Atenção: senhas ${c.de} a ${c.ate}. ${c.msg || 'Dirijam-se à sala de atendimento.'}`;
@@ -822,12 +988,7 @@ function falar(c){
     // o guichê continua na tela, mas não é falado
     texto = `Senha ${pri ? 'prioritária ' : ''}${c.senha}.`;
   }
-  const u = new SpeechSynthesisUtterance(texto);
-  u.lang = 'pt-BR'; u.rate = 0.95;
-  const voz = vozEscolhida();
-  if (voz) u.voice = voz;
-  speechSynthesis.cancel();
-  speechSynthesis.speak(u);
+  dizer(texto);
 }
 
 /* ---- Sons (WebAudio, sem arquivos externos) ---- */
@@ -835,20 +996,207 @@ function tocarSom(){
   if (!ctxAudio) ctxAudio = new (window.AudioContext || window.webkitAudioContext)();
   if (ctxAudio.state === 'suspended') ctxAudio.resume();
   const tipo = document.getElementById('selSom').value;
+
+  // som próprio enviado pelo usuário
+  if (tipo === 'proprio'){
+    if (somProprio){
+      const a = new Audio(somProprio);
+      a.volume = volumeSom();
+      a.play().catch(()=>{});
+    }
+    return;
+  }
+
   const t0 = ctxAudio.currentTime;
-  const nota = (freq, ini, dur, vol = 0.35) => {
+  const volGeral = volumeSom();
+  // nota simples; tipoOnda muda o timbre (sine = suave, square/sawtooth = mais presente)
+  const nota = (freq, ini, dur, vol = 0.35, tipoOnda = 'sine') => {
     const o = ctxAudio.createOscillator(), g = ctxAudio.createGain();
-    o.type = 'sine'; o.frequency.value = freq;
+    o.type = tipoOnda; o.frequency.value = freq;
     g.gain.setValueAtTime(0, t0 + ini);
-    g.gain.linearRampToValueAtTime(vol, t0 + ini + 0.02);
+    g.gain.linearRampToValueAtTime(vol * volGeral, t0 + ini + 0.02);
     g.gain.exponentialRampToValueAtTime(0.001, t0 + ini + dur);
     o.connect(g); g.connect(ctxAudio.destination);
     o.start(t0 + ini); o.stop(t0 + ini + dur + 0.05);
   };
-  if (tipo === 'dingdong'){ nota(830, 0, 0.7); nota(660, 0.45, 0.9); }
-  else if (tipo === 'sino'){ nota(1050, 0, 1.4, 0.4); nota(2100, 0, 0.5, 0.12); }
-  else { nota(600, 0, 0.25); nota(800, 0.22, 0.25); nota(1000, 0.44, 0.5); }
+  // nota que desliza de uma frequência a outra (sirene, sweep)
+  const desliza = (f1, f2, ini, dur, vol = 0.3, tipoOnda = 'sine') => {
+    const o = ctxAudio.createOscillator(), g = ctxAudio.createGain();
+    o.type = tipoOnda;
+    o.frequency.setValueAtTime(f1, t0 + ini);
+    o.frequency.linearRampToValueAtTime(f2, t0 + ini + dur);
+    g.gain.setValueAtTime(0, t0 + ini);
+    g.gain.linearRampToValueAtTime(vol * volGeral, t0 + ini + 0.03);
+    g.gain.exponentialRampToValueAtTime(0.001, t0 + ini + dur);
+    o.connect(g); g.connect(ctxAudio.destination);
+    o.start(t0 + ini); o.stop(t0 + ini + dur + 0.05);
+  };
+
+  switch (tipo){
+    case 'dingdong':                                  // campainha clássica
+      nota(830, 0, 0.7); nota(660, 0.45, 0.9); break;
+    case 'sino':                                      // sino puro com harmônico
+      nota(1050, 0, 1.4, 0.4); nota(2100, 0, 0.5, 0.12); break;
+    case 'trinado':                                   // três notas subindo
+      nota(600, 0, 0.25); nota(800, 0.22, 0.25); nota(1000, 0.44, 0.5); break;
+    case 'aeroporto':                                 // dois tons de aviso público
+      nota(880, 0, 0.5, 0.4); nota(1174, 0.35, 0.8, 0.4); break;
+    case 'supermercado':                              // "plim-plom" descendente
+      nota(1046, 0, 0.45, 0.4); nota(784, 0.3, 0.45, 0.4); nota(523, 0.6, 0.9, 0.4); break;
+    case 'gongo':                                     // grave e longo, corta ruído
+      nota(196, 0, 2.2, 0.5); nota(294, 0, 1.6, 0.25); nota(440, 0, 0.9, 0.12); break;
+    case 'xilofone':                                  // quatro notas rápidas e claras
+      nota(1046, 0, 0.3, 0.3, 'triangle'); nota(1318, 0.12, 0.3, 0.3, 'triangle');
+      nota(1568, 0.24, 0.3, 0.3, 'triangle'); nota(2093, 0.36, 0.6, 0.3, 'triangle'); break;
+    case 'bipe':                                      // eletrônico, bem audível
+      nota(1200, 0, 0.12, 0.3, 'square'); nota(1200, 0.2, 0.12, 0.3, 'square');
+      nota(1200, 0.4, 0.2, 0.3, 'square'); break;
+    case 'sirene':                                    // chama muita atenção
+      desliza(600, 1200, 0, 0.4, 0.28, 'triangle');
+      desliza(1200, 600, 0.4, 0.4, 0.28, 'triangle'); break;
+    case 'harpa':                                     // arpejo suave
+      [523, 659, 784, 1046, 1318].forEach((f, i) =>
+        nota(f, i * 0.09, 1.2 - i * 0.1, 0.22, 'triangle')); break;
+    default:
+      nota(830, 0, 0.7); nota(660, 0.45, 0.9);
+  }
 }
+
+function volumeSom(){
+  const v = Number(localStorage.getItem('volumeSom'));
+  return Number.isFinite(v) && v > 0 ? v / 100 : 1;
+}
+
+/* Baixa antecipadamente os áudios das próximas senhas, para o anúncio sair sem espera */
+async function prepararVozes(estado){
+  if (!vozInternetAtiva() || !estado || !estado.limites) return;
+  const L = estado.limites;
+  const alvos = [];
+  // as próximas cinco de cada fila
+  for (let i = 1; i <= 5; i++){
+    const p = estado.prioridade + i;
+    if (estado.config.prioridadeAtiva && p <= L.maxPrioridade) alvos.push(`Senha prioritária ${p}.`);
+    const c = estado.comum + i;
+    if (c <= L.maxComum) alvos.push(`Senha ${c}.`);
+  }
+  for (const t of alvos){
+    const chave = t + '|' + vozInternetId() + '|' + velocidadeVoz() + '|' + tomVoz();
+    if (cacheVoz.has(chave)) continue;
+    try{
+      const r = await fetch(urlVoz(t));
+      if (!r.ok) return;                    // serviço fora: para de tentar
+      const blob = await r.blob();
+      cacheVoz.set(chave, URL.createObjectURL(blob));
+    }catch(e){ return; }
+  }
+}
+
+/* ---- Escolha da fonte de voz ---- */
+async function montarVozesInternet(){
+  const sel = document.getElementById('selVozNet');
+  if (sel.options.length) return;                       // já carregado
+  try{
+    const r = await fetch('/api/voz?listar');
+    const d = await r.json();
+    const salva = vozInternetId();
+    sel.innerHTML =
+      `<optgroup label="Femininas">${d.vozes.filter(v=>v.feminina)
+        .map(v=>`<option value="${v.id}">${v.nome}</option>`).join('')}</optgroup>` +
+      `<optgroup label="Masculinas">${d.vozes.filter(v=>!v.feminina)
+        .map(v=>`<option value="${v.id}">${v.nome}</option>`).join('')}</optgroup>`;
+    sel.value = salva;
+  }catch(e){
+    sel.innerHTML = '<option value="francisca">Francisca</option>';
+  }
+}
+
+function aplicarFonteVoz(){
+  const net = document.getElementById('fonteNet').checked;
+  localStorage.setItem('fonteVoz', net ? 'internet' : 'navegador');
+  document.getElementById('linhaVozNet').style.display = net ? 'flex' : 'none';
+  document.getElementById('linhaVozLocal').style.display = net ? 'none' : 'flex';
+  document.getElementById('chkTodasVozes').closest('.linhaCfg').style.display = net ? 'none' : 'flex';
+  document.getElementById('infoVozes').style.display = net ? 'none' : 'block';
+  marcarFonteVoz('');
+  if (net) montarVozesInternet();
+}
+document.getElementById('fonteNet').addEventListener('change', aplicarFonteVoz);
+document.getElementById('fonteLocal').addEventListener('change', aplicarFonteVoz);
+document.getElementById('selVozNet').addEventListener('change', ev => {
+  localStorage.setItem('vozInternet', ev.target.value);
+  cacheVoz.clear();          // voz nova: recomeça o cache
+  testarVoz();
+});
+
+/* ---- Som personalizado enviado pelo usuário ---- */
+let somProprio = null;
+
+async function salvarSomProprio(dados){
+  try{
+    const db = await abrirBanco();
+    await new Promise((res, rej) => {
+      const tx = db.transaction('cfg', 'readwrite');
+      tx.objectStore('cfg').put(dados, 'somProprio');
+      tx.oncomplete = res; tx.onerror = () => rej(tx.error);
+    });
+  }catch(e){}
+}
+async function carregarSomProprio(){
+  try{
+    const db = await abrirBanco();
+    somProprio = await new Promise((res, rej) => {
+      const tx = db.transaction('cfg', 'readonly');
+      const rq = tx.objectStore('cfg').get('somProprio');
+      rq.onsuccess = () => res(rq.result || null);
+      rq.onerror = () => rej(rq.error);
+    });
+  }catch(e){ somProprio = null; }
+  const inf = document.getElementById('infoSom');
+  if (inf) inf.textContent = somProprio ? 'arquivo salvo ✓' : 'nenhum arquivo';
+}
+
+document.getElementById('arqSom').addEventListener('change', async ev => {
+  const f = ev.target.files[0];
+  if (!f) return;
+  if (f.size > 3 * 1024 * 1024){
+    alert('Escolha um arquivo de até 3 MB (som curto, de 2 a 4 segundos).');
+    ev.target.value = ''; return;
+  }
+  document.getElementById('infoSom').textContent = 'carregando…';
+  somProprio = await new Promise(res => {
+    const r = new FileReader(); r.onload = () => res(r.result); r.readAsDataURL(f);
+  });
+  await salvarSomProprio(somProprio);
+  document.getElementById('infoSom').textContent = 'arquivo salvo ✓';
+  document.getElementById('selSom').value = 'proprio';
+  localStorage.setItem('somPainel', 'proprio');
+  tocarSom();                        // toca na hora para conferir
+  ev.target.value = '';
+});
+
+function mostrarLinhaSomProprio(){
+  document.getElementById('linhaSomProprio').style.display =
+    document.getElementById('selSom').value === 'proprio' ? 'flex' : 'none';
+}
+
+/* ---- Volume, velocidade e tom ---- */
+document.getElementById('rngVol').addEventListener('input', ev => {
+  localStorage.setItem('volumeSom', ev.target.value);
+  document.getElementById('valVol').textContent = ev.target.value + '%';
+});
+document.getElementById('rngVol').addEventListener('change', () => tocarSom());
+
+document.getElementById('rngVel').addEventListener('input', ev => {
+  localStorage.setItem('velVoz', ev.target.value);
+  document.getElementById('valVel').textContent = (ev.target.value / 100).toFixed(2).replace('.', ',');
+});
+document.getElementById('rngVel').addEventListener('change', () => testarVoz());
+
+document.getElementById('rngTom').addEventListener('input', ev => {
+  localStorage.setItem('tomVoz', ev.target.value);
+  document.getElementById('valTom').textContent = (ev.target.value / 100).toFixed(2).replace('.', ',');
+});
+document.getElementById('rngTom').addEventListener('change', () => testarVoz());
 
 /* ---- Preferências do painel gravadas neste computador ---- */
 document.getElementById('chkAuto').addEventListener('change', ev => {
@@ -860,6 +1208,8 @@ document.getElementById('selIntervalo').addEventListener('change', ev => {
 });
 document.getElementById('selSom').addEventListener('change', ev => {
   localStorage.setItem('somPainel', ev.target.value);
+  mostrarLinhaSomProprio();
+  tocarSom();                        // ouve a mudança na hora
 });
 document.getElementById('chkVoz').addEventListener('change', ev => {
   localStorage.setItem('vozAtiva', ev.target.checked ? '1' : '0');
