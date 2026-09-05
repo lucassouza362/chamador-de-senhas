@@ -157,6 +157,13 @@
   .linhaStat b{color:var(--texto)}
   #btnReset{background:var(--vermelho);color:#fff;padding:14px;font-size:1rem;font-weight:700}
   #btnCsv{background:linear-gradient(180deg,var(--azul),var(--azul2));color:#fff;padding:14px;font-size:1rem;font-weight:700}
+  #btnSalvarFaixas{background:linear-gradient(180deg,var(--verde),#1f7d4a);color:#fff;padding:14px;font-size:1rem;font-weight:700}
+  .cfgSenha{color:var(--texto);display:flex;align-items:center;gap:10px;font-weight:600}
+  .linhaCfgSenha label{color:var(--suave);display:flex;align-items:center;justify-content:space-between;gap:12px;width:100%}
+  .linhaCfgSenha input{width:100px;background:var(--panel2);border:1px solid var(--borda);border-radius:8px;
+    color:var(--texto);padding:10px;font-size:1.1rem;font-weight:700;text-align:center}
+  #resumoFaixas{background:var(--panel2);border-radius:8px;padding:12px;text-align:center;line-height:1.5}
+  #msgFaixas{min-height:20px;font-size:.9rem;text-align:center}
   #resumoRel{line-height:1.6;text-align:left}
   #pinCampo{background:var(--panel2);border:1px solid var(--borda);border-radius:8px;color:var(--texto);
     padding:11px;font-size:1rem;width:100%;text-align:center;letter-spacing:.3em}
@@ -220,7 +227,7 @@
       <small id="restPri">senhas 1 a 20</small>
     </button>
     <button class="btnGrande" id="btnComum" onclick="chamar('comum')">
-      Chamar comum
+      <span id="rotBtnComum">Chamar comum</span>
       <small id="restCom">senhas 21 a 150</small>
     </button>
   </div>
@@ -355,11 +362,31 @@
 <div id="telaAdmin" class="oculto">
   <div class="caixaAdmin">
     <h2>⚙️ Administração</h2>
-    <div class="linhaStat">Prioridade (1–20)<b id="stPri">—</b></div>
-    <div class="linhaStat">Comum (21–150)<b id="stCom">—</b></div>
+    <div class="linhaStat"><span id="rotPri">Prioridade</span><b id="stPri">—</b></div>
+    <div class="linhaStat"><span id="rotCom">Comum</span><b id="stCom">—</b></div>
     <input type="password" id="pinCampo" class="oculto" placeholder="PIN" inputmode="numeric">
     <button id="btnReset" onclick="resetar()">Reiniciar ciclo de senhas</button>
     <div id="msgAdmin"></div>
+  </div>
+
+  <div class="caixaAdmin">
+    <h2>🎫 Faixas de senha</h2>
+    <label class="check cfgSenha"><input type="checkbox" id="chkPri" onchange="alternarPri()"> Usar senhas prioritárias</label>
+    <div class="linhaCfgSenha" id="linhaQtdPri">
+      <label>Quantidade de prioritárias
+        <input type="number" id="numQtdPri" min="1" max="9998" value="20">
+      </label>
+    </div>
+    <div class="linhaCfgSenha">
+      <label>Total de senhas distribuídas
+        <input type="number" id="numTotal" min="1" max="9999" value="150">
+      </label>
+    </div>
+    <div id="resumoFaixas" class="dica"></div>
+    <button id="btnSalvarFaixas" onclick="salvarFaixas()">Salvar faixas</button>
+    <span class="dica">⚠️ Salvar aqui reinicia a contagem: a fila volta ao começo das novas faixas.
+      Faça antes de começar o atendimento do dia.</span>
+    <div id="msgFaixas"></div>
   </div>
 
   <div class="caixaAdmin">
@@ -469,17 +496,26 @@ async function atualizarAtendente(){
     marcarConexao(true);
     const restPri = e.limites.maxPrioridade - e.prioridade;
     const restCom = e.limites.maxComum - e.comum;
+    const temPri = e.config && e.config.prioridadeAtiva;
+
+    // sem fila prioritária: o botão some e o comum vira "próxima senha"
+    document.getElementById('btnPrioridade').classList.toggle('oculto', !temPri);
+    document.getElementById('rotBtnComum').textContent = temPri ? 'Chamar comum' : 'Chamar próxima senha';
+
     document.getElementById('restPri').textContent =
       restPri > 0 ? `última: ${e.prioridade || '—'} · restam ${restPri}` : 'esgotadas';
     document.getElementById('restCom').textContent =
-      restCom > 0 ? `última: ${e.comum > 20 ? e.comum : '—'} · restam ${restCom}` : 'esgotadas';
+      restCom > 0
+        ? `última: ${e.comum > e.limites.baseComum ? e.comum : '—'} · restam ${restCom}`
+        : 'esgotadas';
     if (!chamadaEmCurso){
       document.getElementById('btnPrioridade').disabled = restPri <= 0;
       document.getElementById('btnComum').disabled = restCom <= 0;
     }
 
     // andamento geral
-    document.getElementById('andPri').textContent = `${e.prioridade}/${e.limites.maxPrioridade}`;
+    document.getElementById('andPri').textContent = temPri
+      ? `${e.prioridade}/${e.limites.maxPrioridade}` : '—';
     document.getElementById('andCom').textContent =
       `${Math.max(e.comum - e.limites.baseComum, 0)}/${e.limites.maxComum - e.limites.baseComum}`;
     document.getElementById('andTotal').textContent =
@@ -768,7 +804,7 @@ if ('speechSynthesis' in window){
 }
 
 function testarVoz(){
-  const u = new SpeechSynthesisUtterance('Senha 42. Guichê 3.');
+  const u = new SpeechSynthesisUtterance('Senha 42.');
   u.lang = 'pt-BR'; u.rate = 0.95;
   const v = vozEscolhida();
   if (v) u.voice = v;
@@ -783,7 +819,8 @@ function falar(c){
     texto = `Atenção: senhas ${c.de} a ${c.ate}. ${c.msg || 'Dirijam-se à sala de atendimento.'}`;
   } else {
     const pri = c.tipo === 'prioridade';
-    texto = `Senha ${pri ? 'prioritária ' : ''}${c.senha}. Guichê ${c.guiche}.`;
+    // o guichê continua na tela, mas não é falado
+    texto = `Senha ${pri ? 'prioritária ' : ''}${c.senha}.`;
   }
   const u = new SpeechSynthesisUtterance(texto);
   u.lang = 'pt-BR'; u.rate = 0.95;
@@ -1000,10 +1037,26 @@ async function atualizarAdmin(){
   try{
     const e = await api('GET');
     pinNecessario = e.pinNecessario;
-    document.getElementById('stPri').textContent =
-      `${e.prioridade} de ${e.limites.maxPrioridade} chamadas`;
+    const L = e.limites;
+    const temPri = e.config.prioridadeAtiva;
+
+    // andamento
+    document.getElementById('stPri').textContent = temPri
+      ? `${e.prioridade} de ${L.maxPrioridade} chamadas`
+      : 'desativada';
     document.getElementById('stCom').textContent =
-      `${Math.max(e.comum - e.limites.baseComum, 0)} de ${e.limites.maxComum - e.limites.baseComum} chamadas`;
+      `${Math.max(e.comum - L.baseComum, 0)} de ${L.maxComum - L.baseComum} chamadas`;
+    document.getElementById('rotPri').textContent =
+      temPri ? `Prioridade (1–${L.maxPrioridade})` : 'Prioridade';
+    document.getElementById('rotCom').textContent =
+      `Comum (${L.baseComum + 1}–${L.maxComum})`;
+
+    // formulário de faixas com os valores em vigor
+    document.getElementById('chkPri').checked = temPri;
+    document.getElementById('numQtdPri').value = temPri ? L.maxPrioridade : 20;
+    document.getElementById('numTotal').value = L.maxComum;
+    alternarPri();
+
     document.getElementById('pinCampo').classList.toggle('oculto', !pinNecessario);
     carregarRelatorio();
   }catch(err){
@@ -1076,6 +1129,60 @@ async function limparRelatorio(){
     if (r.erro) alert(r.erro);
     else carregarRelatorio();
   }catch(err){ alert('Falha de conexão.'); }
+}
+
+/* ---- Configuração das faixas de senha ---- */
+function alternarPri(){
+  const ativa = document.getElementById('chkPri').checked;
+  document.getElementById('linhaQtdPri').style.display = ativa ? 'flex' : 'none';
+  previewFaixas();
+}
+function previewFaixas(){
+  const ativa = document.getElementById('chkPri').checked;
+  const qtd = Number(document.getElementById('numQtdPri').value) || 0;
+  const total = Number(document.getElementById('numTotal').value) || 0;
+  const alvo = document.getElementById('resumoFaixas');
+  if (!total){ alvo.textContent = 'Informe o total de senhas.'; return; }
+  if (ativa && (qtd < 1 || qtd >= total)){
+    alvo.innerHTML = '<span style="color:var(--vermelho)">A quantidade de prioritárias precisa ser menor que o total.</span>';
+    return;
+  }
+  alvo.innerHTML = ativa
+    ? `Prioritárias: <b>1 a ${qtd}</b><br>Comuns: <b>${qtd + 1} a ${total}</b>`
+    : `Sem fila prioritária<br>Todas as senhas: <b>1 a ${total}</b>`;
+}
+['numQtdPri','numTotal'].forEach(id =>
+  document.getElementById(id).addEventListener('input', previewFaixas));
+
+async function salvarFaixas(){
+  const ativa = document.getElementById('chkPri').checked;
+  const qtd = Number(document.getElementById('numQtdPri').value);
+  const total = Number(document.getElementById('numTotal').value);
+  const msg = document.getElementById('msgFaixas');
+  msg.style.color = '';
+
+  const aviso = ativa
+    ? `Prioritárias de 1 a ${qtd} e comuns de ${qtd + 1} a ${total}.`
+    : `Sem prioritárias: todas as senhas de 1 a ${total}.`;
+  if (!confirm(`${aviso}\n\nIsso reinicia a contagem das senhas. Confirmar?`)) return;
+
+  try{
+    const pin = pinNecessario ? document.getElementById('pinCampo').value : undefined;
+    const r = await api('POST', {
+      acao: 'configSenhas', prioridadeAtiva: ativa, qtdPrioridade: qtd, totalSenhas: total, pin,
+    });
+    if (r.erro || r.ok === false){
+      msg.style.color = 'var(--vermelho)';
+      msg.textContent = r.erro || 'Não foi possível salvar.';
+    } else {
+      msg.style.color = 'var(--verde)';
+      msg.textContent = 'Faixas salvas e contagem reiniciada.';
+      atualizarAdmin();
+    }
+  }catch(err){
+    msg.style.color = 'var(--vermelho)';
+    msg.textContent = 'Falha de conexão.';
+  }
 }
 
 async function resetar(){
