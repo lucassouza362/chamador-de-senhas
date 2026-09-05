@@ -15,7 +15,17 @@ const K = {
   comum: 'chamador:comum',           // última senha comum chamada (20 a 150)
   historico: 'chamador:historico',   // lista de chamadas (mais recente primeiro)
   seq: 'chamador:seq',               // id incremental de cada chamada (fila de anúncios)
+  log: 'chamador:log',               // registro permanente p/ relatório (não some no reset)
 };
+
+// Grava a chamada no histórico de exibição e no log do relatório
+async function registrar(redis, chamada) {
+  const linha = JSON.stringify(chamada);
+  await redis.lpush(K.historico, linha);
+  await redis.ltrim(K.historico, 0, 29);
+  await redis.lpush(K.log, linha);
+  await redis.ltrim(K.log, 0, 4999); // guarda as últimas 5000 chamadas
+}
 
 function parseItem(x) {
   if (typeof x === 'string') {
@@ -73,8 +83,22 @@ export default async function handler(req, res) {
 
         const id = await redis.incr(K.seq);
         const chamada = { id, senha: n, tipo, guiche, ts: Date.now() };
-        await redis.lpush(K.historico, JSON.stringify(chamada));
-        await redis.ltrim(K.historico, 0, 29);
+        await registrar(redis, chamada);
+        return res.status(200).json({ ok: true, chamada });
+      }
+
+      // ---- Chamar uma senha específica (quem não estava na sala) ----
+      if (acao === 'especifica') {
+        const senha = Number(body.senha);
+        if (!Number.isInteger(senha) || senha < 1 || senha > MAX_COMUM) {
+          return res.status(200).json({ ok: false, erro: `Informe uma senha entre 1 e ${MAX_COMUM}.` });
+        }
+        const guiche = String(body.guiche || '?').slice(0, 20);
+        const tipo = senha <= MAX_PRIORIDADE ? 'prioridade' : 'comum';
+        const id = await redis.incr(K.seq);
+        const chamada = { id, senha, tipo, guiche, ts: Date.now(), avulsa: true };
+        await registrar(redis, chamada);
+        // não mexe nos contadores: a fila normal segue de onde estava
         return res.status(200).json({ ok: true, chamada });
       }
 
@@ -90,8 +114,7 @@ export default async function handler(req, res) {
         const msg = String(body.msg || '').slice(0, 120);
         const id = await redis.incr(K.seq);
         const chamada = { id, intervalo: true, de, ate, guiche, msg, ts: Date.now() };
-        await redis.lpush(K.historico, JSON.stringify(chamada));
-        await redis.ltrim(K.historico, 0, 29);
+        await registrar(redis, chamada);
         return res.status(200).json({ ok: true, chamada });
       }
 
@@ -104,9 +127,16 @@ export default async function handler(req, res) {
 
         const id = await redis.incr(K.seq);
         const chamada = { ...ultima, id, ts: Date.now(), repetida: true };
+        // repetição só reanuncia: não entra no log para não contar duas vezes no relatório
         await redis.lpush(K.historico, JSON.stringify(chamada));
         await redis.ltrim(K.historico, 0, 29);
         return res.status(200).json({ ok: true, chamada });
+      }
+
+      // ---- Relatório: devolve o log completo para exportar em CSV ----
+      if (acao === 'relatorio') {
+        const log = (await redis.lrange(K.log, 0, 4999)).map(parseItem).filter(Boolean);
+        return res.status(200).json({ ok: true, log });
       }
 
       // ---- Reset (admin): recomeça o ciclo de senhas ----
@@ -120,6 +150,17 @@ export default async function handler(req, res) {
           redis.set(K.comum, BASE_COMUM),
           redis.del(K.historico),
         ]);
+        // K.log é preservado de propósito: o relatório acumula todos os dias
+        return res.status(200).json({ ok: true });
+      }
+
+      // ---- Apagar o registro do relatório (ação separada e explícita) ----
+      if (acao === 'limparLog') {
+        const pinEnv = process.env.ADMIN_PIN;
+        if (pinEnv && String(body.pin || '') !== String(pinEnv)) {
+          return res.status(403).json({ erro: 'PIN incorreto' });
+        }
+        await redis.del(K.log);
         return res.status(200).json({ ok: true });
       }
 
