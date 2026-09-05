@@ -1092,21 +1092,57 @@ async function prepararVozes(estado){
 }
 
 /* ---- Escolha da fonte de voz ---- */
-async function montarVozesInternet(){
+// lista embutida: o seletor funciona mesmo se o servidor não responder
+const VOZES_NET = [
+  { id:'francisca', nome:'Francisca',  grupo:'Brasil · femininas' },
+  { id:'thalita',   nome:'Thalita',    grupo:'Brasil · femininas' },
+  { id:'brenda',    nome:'Brenda',     grupo:'Brasil · femininas' },
+  { id:'elza',      nome:'Elza',       grupo:'Brasil · femininas' },
+  { id:'giovanna',  nome:'Giovanna',   grupo:'Brasil · femininas' },
+  { id:'leila',     nome:'Leila',      grupo:'Brasil · femininas' },
+  { id:'leticia',   nome:'Letícia',    grupo:'Brasil · femininas' },
+  { id:'manuela',   nome:'Manuela',    grupo:'Brasil · femininas' },
+  { id:'yara',      nome:'Yara',       grupo:'Brasil · femininas' },
+  { id:'antonio',   nome:'Antônio',    grupo:'Brasil · masculinas' },
+  { id:'donato',    nome:'Donato',     grupo:'Brasil · masculinas' },
+  { id:'fabio',     nome:'Fábio',      grupo:'Brasil · masculinas' },
+  { id:'humberto',  nome:'Humberto',   grupo:'Brasil · masculinas' },
+  { id:'julio',     nome:'Júlio',      grupo:'Brasil · masculinas' },
+  { id:'nicolau',   nome:'Nicolau',    grupo:'Brasil · masculinas' },
+  { id:'valerio',   nome:'Valério',    grupo:'Brasil · masculinas' },
+  { id:'raquel',    nome:'Raquel',     grupo:'Portugal' },
+  { id:'fernanda',  nome:'Fernanda',   grupo:'Portugal' },
+  { id:'duarte',    nome:'Duarte',     grupo:'Portugal' },
+];
+
+function montarVozesInternet(){
   const sel = document.getElementById('selVozNet');
-  if (sel.options.length) return;                       // já carregado
+  if (sel.options.length) return;
+  const grupos = [...new Set(VOZES_NET.map(v => v.grupo))];
+  sel.innerHTML = grupos.map(g =>
+    `<optgroup label="${g}">` +
+    VOZES_NET.filter(v => v.grupo === g)
+      .map(v => `<option value="${v.id}">${v.nome}</option>`).join('') +
+    '</optgroup>').join('');
+  sel.value = vozInternetId();
+  verificarServicoVoz();
+}
+
+// confere se o endpoint de voz está no ar e avisa em bom português se não estiver
+async function verificarServicoVoz(){
+  const st = document.getElementById('statusVoz');
+  st.textContent = 'verificando serviço de voz…'; st.style.color = 'var(--suave)';
   try{
     const r = await fetch('/api/voz?listar');
+    if (!r.ok) throw new Error('HTTP ' + r.status);
     const d = await r.json();
-    const salva = vozInternetId();
-    sel.innerHTML =
-      `<optgroup label="Femininas">${d.vozes.filter(v=>v.feminina)
-        .map(v=>`<option value="${v.id}">${v.nome}</option>`).join('')}</optgroup>` +
-      `<optgroup label="Masculinas">${d.vozes.filter(v=>!v.feminina)
-        .map(v=>`<option value="${v.id}">${v.nome}</option>`).join('')}</optgroup>`;
-    sel.value = salva;
+    st.textContent = `✓ serviço no ar — ${d.vozes.length} vozes disponíveis`;
+    st.style.color = 'var(--verde)';
   }catch(e){
-    sel.innerHTML = '<option value="francisca">Francisca</option>';
+    st.innerHTML = '⚠️ o serviço de voz da internet não respondeu. Confira se os arquivos ' +
+                   '<b>api/voz.js</b> e <b>package.json</b> foram publicados. Por ora o anúncio ' +
+                   'usa a voz do computador.';
+    st.style.color = 'var(--ambar)';
   }
 }
 
