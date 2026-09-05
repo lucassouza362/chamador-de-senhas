@@ -1,58 +1,71 @@
 import { MsEdgeTTS, OUTPUT_FORMAT } from 'msedge-tts';
 
-// Vozes neurais (não dependem do Windows nem do navegador)
-const VOZES = {
-  // Brasil — femininas
-  francisca:'pt-BR-FranciscaNeural',
-  thalita:  'pt-BR-ThalitaMultilingualNeural',
-  brenda:   'pt-BR-BrendaNeural',
-  elza:     'pt-BR-ElzaNeural',
-  giovanna: 'pt-BR-GiovannaNeural',
-  leila:    'pt-BR-LeilaNeural',
-  leticia:  'pt-BR-LeticiaNeural',
-  manuela:  'pt-BR-ManuelaNeural',
-  yara:     'pt-BR-YaraNeural',
-  // Brasil — masculinas
-  antonio:  'pt-BR-AntonioNeural',
-  donato:   'pt-BR-DonatoNeural',
-  fabio:    'pt-BR-FabioNeural',
-  humberto: 'pt-BR-HumbertoNeural',
-  julio:    'pt-BR-JulioNeural',
-  nicolau:  'pt-BR-NicolauNeural',
-  valerio:  'pt-BR-ValerioNeural',
-  // Portugal
-  raquel:   'pt-PT-RaquelNeural',
-  fernanda: 'pt-PT-FernandaNeural',
-  duarte:   'pt-PT-DuarteNeural',
-};
-
-const FEMININAS = ['francisca','thalita','brenda','elza','giovanna','leila','leticia','manuela','yara','raquel','fernanda'];
-const PORTUGAL  = ['raquel','fernanda','duarte'];
-
 export const config = { maxDuration: 25 };
 
+// Lista de reserva, usada só se a consulta ao serviço falhar
+const RESERVA = [
+  'pt-BR-FranciscaNeural', 'pt-BR-AntonioNeural',
+  'pt-BR-ThalitaMultilingualNeural', 'pt-PT-RaquelNeural', 'pt-PT-DuarteNeural',
+];
+
+// "pt-BR-FranciscaNeural" → { id: 'francisca', nome: 'Francisca', ... }
+function descrever(nomeTecnico, genero) {
+  const m = /^([a-z]{2})-([A-Z]{2})-(.+?)(Multilingual)?Neural$/.exec(nomeTecnico);
+  if (!m) return null;
+  const [, idioma, regiao, curto, multi] = m;
+  const nomesRegiao = { BR: 'Brasil', PT: 'Portugal' };
+  return {
+    id: curto.toLowerCase(),
+    nome: curto,
+    tecnico: nomeTecnico,
+    regiao: nomesRegiao[regiao] || `${idioma}-${regiao}`,
+    feminina: genero ? genero.toLowerCase() === 'female' : undefined,
+    multilingue: Boolean(multi),
+  };
+}
+
+let cacheVozes = null;   // a lista muda raramente; guarda entre chamadas
+
+async function listarVozes() {
+  if (cacheVozes) return cacheVozes;
+  try {
+    const tts = new MsEdgeTTS();
+    const todas = await tts.getVoices();
+    const pt = todas
+      .filter(v => (v.Locale || '').toLowerCase().startsWith('pt'))
+      .map(v => descrever(v.ShortName, v.Gender))
+      .filter(Boolean);
+    if (pt.length) { cacheVozes = pt; return pt; }
+  } catch (e) { /* cai para a reserva */ }
+  return RESERVA.map(n => descrever(n)).filter(Boolean);
+}
+
+// Aceita tanto o apelido ("francisca") quanto o nome técnico completo
+async function resolverVoz(pedida) {
+  const vozes = await listarVozes();
+  const alvo = String(pedida || 'francisca').toLowerCase();
+  const achada = vozes.find(v => v.id === alvo || v.tecnico.toLowerCase() === alvo);
+  return (achada || vozes.find(v => v.id === 'francisca') || vozes[0]).tecnico;
+}
+
 export default async function handler(req, res) {
-  // lista as vozes disponíveis para o seletor da interface
+  res.setHeader('Access-Control-Allow-Origin', '*');
+
+  // lista as vozes que o serviço realmente oferece agora
   if (req.method === 'GET' && req.query.listar !== undefined) {
-    return res.status(200).json({
-      vozes: Object.keys(VOZES).map(id => ({
-        id,
-        nome: id.charAt(0).toUpperCase() + id.slice(1),
-        feminina: FEMININAS.includes(id),
-        portugal: PORTUGAL.includes(id),
-      })),
-    });
+    const vozes = await listarVozes();
+    res.setHeader('Cache-Control', 'public, max-age=86400');
+    return res.status(200).json({ vozes });
   }
 
   const texto = String(req.query.texto || '').slice(0, 200).trim();
-  const vozId = String(req.query.voz || 'francisca').toLowerCase();
   const vel = String(req.query.vel || '0');   // ex.: "-10" = 10% mais lento
   const tom = String(req.query.tom || '0');
 
   if (!texto) return res.status(400).json({ erro: 'Texto não informado' });
-  const voz = VOZES[vozId] || VOZES.francisca;
 
   try {
+    const voz = await resolverVoz(req.query.voz);
     const tts = new MsEdgeTTS();
     await tts.setMetadata(voz, OUTPUT_FORMAT.AUDIO_24KHZ_48KBITRATE_MONO_MP3);
 
@@ -75,10 +88,9 @@ export default async function handler(req, res) {
     res.setHeader('Content-Type', 'audio/mpeg');
     // cache longo: a mesma senha nunca precisa ser gerada duas vezes
     res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
-    res.setHeader('Access-Control-Allow-Origin', '*');
     return res.status(200).send(audio);
   } catch (e) {
     // o frontend cai automaticamente para a voz do navegador
-    return res.status(503).json({ erro: 'Voz da internet indisponível: ' + (e.message || e) });
+    return res.status(503).json({ erro: 'Voz indisponível: ' + (e.message || e) });
   }
 }
