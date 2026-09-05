@@ -1,20 +1,33 @@
 import { MsEdgeTTS, OUTPUT_FORMAT } from 'msedge-tts';
 
-// Vozes neurais brasileiras (não dependem do Windows nem do navegador)
+// Vozes neurais (não dependem do Windows nem do navegador)
 const VOZES = {
-  thalita:  'pt-BR-ThalitaMultilingualNeural',
+  // Brasil — femininas
   francisca:'pt-BR-FranciscaNeural',
-  antonio:  'pt-BR-AntonioNeural',
+  thalita:  'pt-BR-ThalitaMultilingualNeural',
   brenda:   'pt-BR-BrendaNeural',
   elza:     'pt-BR-ElzaNeural',
   giovanna: 'pt-BR-GiovannaNeural',
   leila:    'pt-BR-LeilaNeural',
+  leticia:  'pt-BR-LeticiaNeural',
+  manuela:  'pt-BR-ManuelaNeural',
   yara:     'pt-BR-YaraNeural',
+  // Brasil — masculinas
+  antonio:  'pt-BR-AntonioNeural',
   donato:   'pt-BR-DonatoNeural',
+  fabio:    'pt-BR-FabioNeural',
   humberto: 'pt-BR-HumbertoNeural',
   julio:    'pt-BR-JulioNeural',
+  nicolau:  'pt-BR-NicolauNeural',
   valerio:  'pt-BR-ValerioNeural',
+  // Portugal
+  raquel:   'pt-PT-RaquelNeural',
+  fernanda: 'pt-PT-FernandaNeural',
+  duarte:   'pt-PT-DuarteNeural',
 };
+
+const FEMININAS = ['francisca','thalita','brenda','elza','giovanna','leila','leticia','manuela','yara','raquel','fernanda'];
+const PORTUGAL  = ['raquel','fernanda','duarte'];
 
 export const config = { maxDuration: 25 };
 
@@ -25,7 +38,8 @@ export default async function handler(req, res) {
       vozes: Object.keys(VOZES).map(id => ({
         id,
         nome: id.charAt(0).toUpperCase() + id.slice(1),
-        feminina: ['thalita','francisca','brenda','elza','giovanna','leila','yara'].includes(id),
+        feminina: FEMININAS.includes(id),
+        portugal: PORTUGAL.includes(id),
       })),
     });
   }
