@@ -337,9 +337,11 @@
       <span id="valZoom" class="valZoom">100%</span>
       <button onclick="zoomPadrao()">Redefinir</button>
     </div>
+    <span id="statusZoom" class="dica" style="color:var(--verde);min-height:16px"></span>
     <div id="previaZoom"><span class="dica">Carregue slides para ver a prévia</span></div>
-    <span class="dica">A prévia mostra como o slide vai aparecer no projetor. Acima de 100% a imagem
-      é ampliada e as bordas ficam de fora — útil quando o slide tem muita margem branca.</span>
+    <span class="dica">📱 O zoom vale para o projetor e pode ser ajustado daqui ou de outro aparelho
+      (celular, por exemplo) — leva uns 3 segundos para o projetor obedecer.</span>
+    <span class="dica">Acima de 100% a imagem é ampliada a partir do centro e as bordas ficam de fora.</span>
     <span class="dica">Os slides ficam gravados neste computador — não precisa carregar de novo amanhã.</span>
   </div>
 
@@ -568,6 +570,7 @@ let pollPainel = null, ultimoId = null, filaAnuncios = [], anunciando = false;
 let slides = [], idxSlide = 0, timerSlides = null, slidesAtivos = false;
 let ctxAudio = null;
 let wakeLock = null;
+let zoomRemoto = 100;   // último zoom recebido do servidor
 
 /* ---- Mantém a tela acesa enquanto o painel está aberto ---- */
 async function pedirWakeLock(){
@@ -584,7 +587,7 @@ document.addEventListener('visibilitychange', () => {
   if (document.visibilityState === 'visible' && pollPainel) pedirWakeLock();
 });
 
-function abrirConfig(){
+async function abrirConfig(){
   // reflete o que já está salvo neste computador
   const somSalvo = localStorage.getItem('somPainel');
   if (somSalvo) document.getElementById('selSom').value = somSalvo;
@@ -592,9 +595,16 @@ function abrirConfig(){
   if (intSalvo) document.getElementById('selIntervalo').value = intSalvo;
   document.getElementById('chkAuto').checked = localStorage.getItem('slidesAuto') === '1';
   document.getElementById('chkVoz').checked = localStorage.getItem('vozAtiva') !== '0';
-  const z = zoomAtual();
+
+  // o zoom é compartilhado: busca o valor que está valendo no projetor
+  let z = zoomAtual();
+  try{
+    const e = await api('GET');
+    if (e.config && e.config.zoom){ z = e.config.zoom; zoomRemoto = z; localStorage.setItem('zoomSlides', z); }
+  }catch(err){}
   document.getElementById('rngZoom').value = z;
   document.getElementById('valZoom').textContent = z + '%';
+
   if (!slides.length) carregarSlidesSalvos(true);   // true = só conta, não inicia
   else atualizarRotuloSlides();
   desenharPrevia();
@@ -640,6 +650,17 @@ async function cicloPainel(){
     }
     // guarda para continuar exibindo caso a conexão caia
     try{ localStorage.setItem('histPainel', JSON.stringify(hist.slice(-10))); }catch(e2){}
+
+    // zoom controlado à distância: se mudou no servidor, aplica aqui
+    const zServidor = (e.config && e.config.zoom) || 100;
+    if (zServidor !== zoomRemoto){
+      zoomRemoto = zServidor;
+      localStorage.setItem('zoomSlides', zServidor);   // guarda p/ funcionar offline também
+      aplicarZoom();
+      const rng = document.getElementById('rngZoom');
+      if (rng){ rng.value = zServidor; document.getElementById('valZoom').textContent = zServidor + '%'; }
+    }
+
     desenharHistorico(hist);
     processarFila();
     marcarConexao(true);
@@ -806,10 +827,24 @@ document.getElementById('selSom').addEventListener('change', ev => {
 document.getElementById('chkVoz').addEventListener('change', ev => {
   localStorage.setItem('vozAtiva', ev.target.checked ? '1' : '0');
 });
-document.getElementById('rngZoom').addEventListener('input', ev => {
+const rngZoom = document.getElementById('rngZoom');
+// arrastar: resposta imediata na prévia deste aparelho
+rngZoom.addEventListener('input', ev => {
   localStorage.setItem('zoomSlides', ev.target.value);
   document.getElementById('valZoom').textContent = ev.target.value + '%';
-  aplicarZoom();   // o projetor já mostra a mudança enquanto você arrasta
+  aplicarZoom();
+});
+// soltar: manda para o servidor e o projetor obedece em poucos segundos
+rngZoom.addEventListener('change', async ev => {
+  const z = Number(ev.target.value);
+  const st = document.getElementById('statusZoom');
+  st.textContent = 'enviando…';
+  try{
+    const r = await api('POST', { acao: 'config', zoom: z });
+    if (r.ok){ zoomRemoto = z; st.textContent = 'aplicado no projetor ✓'; }
+    else st.textContent = r.erro || 'não foi possível aplicar';
+  }catch(err){ st.textContent = 'sem conexão — vale só neste aparelho'; }
+  setTimeout(() => { st.textContent = ''; }, 4000);
 });
 
 /* ---- Barra de controle escondida ---- */
@@ -937,16 +972,19 @@ function aplicarZoom(){
 function desenharPrevia(){
   const cx = document.getElementById('previaZoom');
   if (!slides.length){
-    cx.innerHTML = '<span class="dica">Carregue slides para ver a prévia</span>';
+    cx.innerHTML = '<span class="dica" style="padding:12px;text-align:center">Sem prévia neste aparelho —<br>' +
+                   'os slides estão no computador do projetor.<br>' +
+                   'Arraste o zoom e olhe direto para a tela projetada.</span>';
     return;
   }
   cx.innerHTML = `<img src="${slides[idxSlide] || slides[0]}" alt="" style="transform:scale(${zoomAtual()/100})">`;
 }
-function zoomPadrao(){
+async function zoomPadrao(){
   localStorage.setItem('zoomSlides', 100);
   document.getElementById('rngZoom').value = 100;
   document.getElementById('valZoom').textContent = '100%';
   aplicarZoom();
+  try{ await api('POST', { acao: 'config', zoom: 100 }); zoomRemoto = 100; }catch(e){}
 }
 
 function mostrarSlide(){
