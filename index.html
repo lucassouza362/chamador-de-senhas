@@ -56,6 +56,23 @@
   .btnGrande:disabled{opacity:.4;cursor:not-allowed}
   #btnRepetir{background:var(--panel2);color:var(--texto);border:1px solid var(--borda);padding:12px 26px;font-size:1rem}
   #avisoAtend{min-height:22px;color:var(--vermelho);font-weight:600}
+  .avisoOffline{background:#3a2410;border:1px solid var(--ambar);color:var(--ambar);
+    border-radius:10px;padding:10px 18px;font-weight:600;font-size:.9rem;text-align:center}
+
+  #caixaEspecifica{background:var(--panel);border:1px solid var(--borda);border-radius:14px;
+    padding:16px 22px;display:flex;flex-direction:column;gap:10px;min-width:300px;max-width:380px}
+  #caixaEspecifica h3{font-size:.8rem;color:var(--suave);text-transform:uppercase;letter-spacing:.1em;text-align:center;font-weight:600}
+  .linhaEspec{display:flex;gap:10px;justify-content:center}
+  .linhaEspec input{width:100px;background:var(--panel2);border:1px solid var(--borda);border-radius:8px;
+    color:var(--texto);padding:10px;font-size:1.3rem;font-weight:700;text-align:center}
+  .linhaEspec button{background:var(--panel2);color:var(--texto);border:1px solid var(--borda);padding:10px 22px;font-size:1rem;font-weight:600}
+  .linhaEspec button:hover{border-color:var(--azul)}
+  .dica{color:var(--suave);font-size:.75rem;text-align:center;line-height:1.35}
+
+  #andamento{display:flex;gap:22px;background:var(--panel);border:1px solid var(--borda);
+    border-radius:12px;padding:12px 22px;font-size:.85rem;color:var(--suave)}
+  #andamento b{color:var(--texto);font-size:1.05rem}
+  #andamento div{text-align:center}
 
   #caixaIntervalo{background:var(--panel);border:1px solid var(--borda);border-radius:14px;
     padding:18px 22px;display:flex;flex-direction:column;gap:12px;min-width:300px;max-width:380px}
@@ -113,6 +130,8 @@
   .linhaStat{display:flex;justify-content:space-between;color:var(--suave)}
   .linhaStat b{color:var(--texto)}
   #btnReset{background:var(--vermelho);color:#fff;padding:14px;font-size:1rem;font-weight:700}
+  #btnCsv{background:linear-gradient(180deg,var(--azul),var(--azul2));color:#fff;padding:14px;font-size:1rem;font-weight:700}
+  #resumoRel{line-height:1.6;text-align:left}
   #pinCampo{background:var(--panel2);border:1px solid var(--borda);border-radius:8px;color:var(--texto);
     padding:11px;font-size:1rem;width:100%;text-align:center;letter-spacing:.3em}
   #msgAdmin{min-height:20px;font-size:.9rem;text-align:center}
@@ -154,11 +173,18 @@
   <div id="cabAtend">Guichê <b id="rotGuiche">1</b>
     <button class="linkVoltar" onclick="irPara('guiche')">trocar</button>
   </div>
+  <div class="avisoOffline oculto">⚠️ Sem conexão — as chamadas não estão sendo registradas</div>
 
   <div id="ultimaAtend">
     <div class="rot">Última senha chamada por você</div>
     <div class="num" id="numAtend">—</div>
     <div class="tag" id="tagAtend">&nbsp;</div>
+  </div>
+
+  <div id="andamento">
+    <div>Prioridade<br><b id="andPri">—</b></div>
+    <div>Comum<br><b id="andCom">—</b></div>
+    <div>Chamadas hoje<br><b id="andTotal">—</b></div>
   </div>
 
   <div class="botoesChamar">
@@ -173,6 +199,15 @@
   </div>
 
   <button id="btnRepetir" onclick="repetir()">🔁 Repetir última chamada</button>
+
+  <div id="caixaEspecifica">
+    <h3>Chamar uma senha específica</h3>
+    <div class="linhaEspec">
+      <input type="number" id="espNum" min="1" max="150" placeholder="nº">
+      <button id="btnEspecifica" onclick="chamarEspecifica()">Chamar</button>
+    </div>
+    <span class="dica">Para quem não estava na sala. Não altera a ordem da fila.</span>
+  </div>
 
   <div id="caixaIntervalo">
     <h3>Chamar intervalo de senhas</h3>
@@ -195,6 +230,7 @@
   <div id="faixaHist">
     <h3>Últimas<br>senhas</h3>
     <div id="faixaItens"></div>
+    <div class="avisoOffline oculto" id="offPainel" style="padding:6px 12px;font-size:.75rem">⚠️ sem conexão</div>
   </div>
 
   <div id="overlayChamada" class="oculto">
@@ -224,6 +260,11 @@
     <label>Slides
       <input type="file" id="arqSlides" accept="image/*,application/pdf" multiple>
     </label>
+    <span id="infoSlidesSalvos" style="color:var(--suave);font-size:.8rem">nenhum slide salvo</span>
+    <button onclick="limparSlides()">🗑 Limpar</button>
+    <label title="Iniciar os slides sozinho ao abrir o painel">
+      <input type="checkbox" id="chkAuto"> Auto
+    </label>
     <label>Intervalo
       <select id="selIntervalo">
         <option value="5">5 s</option>
@@ -247,6 +288,13 @@
     <input type="password" id="pinCampo" class="oculto" placeholder="PIN" inputmode="numeric">
     <button id="btnReset" onclick="resetar()">Reiniciar ciclo de senhas</button>
     <div id="msgAdmin"></div>
+  </div>
+
+  <div class="caixaAdmin">
+    <h2>📊 Relatório</h2>
+    <div id="resumoRel" class="dica">Carregando…</div>
+    <button id="btnCsv" onclick="baixarCsv()">⬇ Baixar CSV das chamadas</button>
+    <button class="linkVoltar" onclick="limparRelatorio()">apagar registro do relatório</button>
   </div>
   <button class="linkVoltar" onclick="irPara('home')">Início</button>
 </div>
@@ -282,12 +330,37 @@ function irPara(t){
    API
 ================================================================ */
 async function api(metodo, corpo){
-  const r = await fetch('/api/estado', {
-    method: metodo,
-    headers: { 'Content-Type': 'application/json' },
-    body: corpo ? JSON.stringify(corpo) : undefined,
-  });
-  return r.json();
+  const ctrl = new AbortController();
+  const timeout = setTimeout(() => ctrl.abort(), 8000);   // não trava esperando rede morta
+  try{
+    const r = await fetch('/api/estado', {
+      method: metodo,
+      headers: { 'Content-Type': 'application/json' },
+      body: corpo ? JSON.stringify(corpo) : undefined,
+      signal: ctrl.signal,
+    });
+    return await r.json();
+  } finally { clearTimeout(timeout); }
+}
+
+/* ---- Plano B: estado guardado no próprio navegador ---- */
+function guardarLocal(chamada){
+  if (!chamada) return;
+  try{
+    const prev = JSON.parse(localStorage.getItem('ultimasChamadas') || '[]');
+    prev.unshift(chamada);
+    localStorage.setItem('ultimasChamadas', JSON.stringify(prev.slice(0, 30)));
+  }catch(e){}
+}
+function lerLocal(){
+  try{ return JSON.parse(localStorage.getItem('ultimasChamadas') || '[]'); }catch(e){ return []; }
+}
+
+let online = true;
+function marcarConexao(ok){
+  if (ok === online) return;
+  online = ok;
+  document.querySelectorAll('.avisoOffline').forEach(el => el.classList.toggle('oculto', ok));
 }
 
 /* ================================================================
@@ -302,30 +375,54 @@ function iniciarAtendente(){
   pollAtend = setInterval(atualizarAtendente, 4000);
 }
 
+let chamadaEmCurso = false;   // trava contra duplo clique
+
+// bloqueia os botões de chamada por alguns instantes
+function travarBotoes(travado){
+  chamadaEmCurso = travado;
+  ['btnPrioridade','btnComum','btnEspecifica'].forEach(id => {
+    const b = document.getElementById(id);
+    if (b) b.disabled = travado;
+  });
+  if (!travado) atualizarAtendente();  // devolve o estado real (faixa esgotada continua desativada)
+}
+
 async function atualizarAtendente(){
   try{
     const e = await api('GET');
     pinNecessario = e.pinNecessario;
+    marcarConexao(true);
     const restPri = e.limites.maxPrioridade - e.prioridade;
     const restCom = e.limites.maxComum - e.comum;
     document.getElementById('restPri').textContent =
       restPri > 0 ? `última: ${e.prioridade || '—'} · restam ${restPri}` : 'esgotadas';
     document.getElementById('restCom').textContent =
       restCom > 0 ? `última: ${e.comum > 20 ? e.comum : '—'} · restam ${restCom}` : 'esgotadas';
-    document.getElementById('btnPrioridade').disabled = restPri <= 0;
-    document.getElementById('btnComum').disabled = restCom <= 0;
+    if (!chamadaEmCurso){
+      document.getElementById('btnPrioridade').disabled = restPri <= 0;
+      document.getElementById('btnComum').disabled = restCom <= 0;
+    }
 
-    const minha = (e.historico || []).find(c => String(c.guiche) === String(guiche));
+    // andamento geral
+    document.getElementById('andPri').textContent = `${e.prioridade}/${e.limites.maxPrioridade}`;
+    document.getElementById('andCom').textContent =
+      `${Math.max(e.comum - e.limites.baseComum, 0)}/${e.limites.maxComum - e.limites.baseComum}`;
+    document.getElementById('andTotal').textContent =
+      e.prioridade + Math.max(e.comum - e.limites.baseComum, 0);
+
+    const minha = (e.historico || []).find(c => String(c.guiche) === String(guiche) && !c.intervalo);
     if (minha){
       document.getElementById('numAtend').textContent = minha.senha;
       const tag = document.getElementById('tagAtend');
       tag.textContent = minha.tipo === 'prioridade' ? 'PRIORIDADE' : 'COMUM';
       tag.className = 'tag ' + (minha.tipo === 'prioridade' ? 'tagPri' : 'tagCom');
     }
-  }catch(err){ /* silencioso; tenta no próximo ciclo */ }
+  }catch(err){ marcarConexao(false); }
 }
 
 async function chamar(tipo){
+  if (chamadaEmCurso) return;          // ignora o segundo clique
+  travarBotoes(true);
   const aviso = document.getElementById('avisoAtend');
   aviso.textContent = '';
   try{
@@ -334,9 +431,35 @@ async function chamar(tipo){
       aviso.textContent = tipo === 'prioridade'
         ? 'Todas as senhas prioritárias (1–20) já foram chamadas.'
         : 'Todas as senhas comuns (21–150) já foram chamadas.';
+    } else if (r.chamada){
+      guardarLocal(r.chamada);
     }
-    atualizarAtendente();
-  }catch(err){ aviso.textContent = 'Falha de conexão. Tente novamente.'; }
+    marcarConexao(true);
+  }catch(err){
+    aviso.textContent = 'Falha de conexão. Verifique se a senha foi chamada antes de repetir.';
+    marcarConexao(false);
+  }
+  setTimeout(() => travarBotoes(false), 2000);   // 2 s de trava
+}
+
+async function chamarEspecifica(){
+  if (chamadaEmCurso) return;
+  const campo = document.getElementById('espNum');
+  const senha = Number(campo.value);
+  const aviso = document.getElementById('avisoAtend');
+  aviso.textContent = '';
+  if (!senha){ aviso.textContent = 'Digite o número da senha.'; return; }
+  travarBotoes(true);
+  try{
+    const r = await api('POST', { acao: 'especifica', senha, guiche });
+    if (r.erro || r.ok === false) aviso.textContent = r.erro || 'Não foi possível chamar.';
+    else { campo.value = ''; guardarLocal(r.chamada); }
+    marcarConexao(true);
+  }catch(err){
+    aviso.textContent = 'Falha de conexão. Tente novamente.';
+    marcarConexao(false);
+  }
+  setTimeout(() => travarBotoes(false), 2000);
 }
 
 async function chamarIntervalo(){
@@ -394,6 +517,15 @@ function iniciarPainel(){
   cicloPainel();
   pollPainel = setInterval(cicloPainel, 2500);
   pedirWakeLock();
+
+  // restaura preferências salvas deste computador
+  document.getElementById('chkAuto').checked = localStorage.getItem('slidesAuto') === '1';
+  const intSalvo = localStorage.getItem('intervaloSlides');
+  if (intSalvo) document.getElementById('selIntervalo').value = intSalvo;
+  const somSalvo = localStorage.getItem('somPainel');
+  if (somSalvo) document.getElementById('selSom').value = somSalvo;
+  if (!slides.length) carregarSlidesSalvos();
+  else if (!slidesAtivos && localStorage.getItem('slidesAuto') === '1') alternarSlides();
 }
 function pararPainel(){
   clearInterval(pollPainel); pollPainel = null;
@@ -414,9 +546,21 @@ async function cicloPainel(){
         if (c.id > ultimoId){ filaAnuncios.push(c); ultimoId = c.id; }
       }
     }
+    // guarda para continuar exibindo caso a conexão caia
+    try{ localStorage.setItem('histPainel', JSON.stringify(hist.slice(-10))); }catch(e2){}
     desenharHistorico(hist);
     processarFila();
-  }catch(err){ /* tenta no próximo ciclo */ }
+    marcarConexao(true);
+  }catch(err){
+    marcarConexao(false);
+    // sem rede: mantém na tela o último histórico conhecido
+    if (!document.getElementById('faixaItens').innerHTML.trim()){
+      try{
+        const salvo = JSON.parse(localStorage.getItem('histPainel') || '[]');
+        if (salvo.length) desenharHistorico(salvo);
+      }catch(e2){}
+    }
+  }
 }
 
 function desenharHistorico(histAsc){
@@ -556,6 +700,18 @@ function tocarSom(){
   else { nota(600, 0, 0.25); nota(800, 0.22, 0.25); nota(1000, 0.44, 0.5); }
 }
 
+/* ---- Preferências do painel gravadas neste computador ---- */
+document.getElementById('chkAuto').addEventListener('change', ev => {
+  localStorage.setItem('slidesAuto', ev.target.checked ? '1' : '0');
+});
+document.getElementById('selIntervalo').addEventListener('change', ev => {
+  localStorage.setItem('intervaloSlides', ev.target.value);
+  if (slidesAtivos){ alternarSlides(); alternarSlides(); }  // reinicia com o novo tempo
+});
+document.getElementById('selSom').addEventListener('change', ev => {
+  localStorage.setItem('somPainel', ev.target.value);
+});
+
 /* ---- Barra de controle escondida ---- */
 let timerBarra = null;
 document.getElementById('telaPainel').addEventListener('mousemove', () => {
@@ -572,6 +728,58 @@ function telaCheia(){
 }
 
 /* ---- Slides: imagens e PDF ---- */
+/* ---- Armazenamento dos slides (IndexedDB: aguenta arquivos grandes) ---- */
+function abrirBanco(){
+  return new Promise((res, rej) => {
+    const req = indexedDB.open('chamadorSlides', 1);
+    req.onupgradeneeded = () => req.result.createObjectStore('cfg');
+    req.onsuccess = () => res(req.result);
+    req.onerror = () => rej(req.error);
+  });
+}
+async function salvarSlides(lista){
+  try{
+    const db = await abrirBanco();
+    await new Promise((res, rej) => {
+      const tx = db.transaction('cfg', 'readwrite');
+      tx.objectStore('cfg').put(lista, 'slides');
+      tx.oncomplete = res; tx.onerror = () => rej(tx.error);
+    });
+  }catch(e){ /* sem espaço ou modo privado: segue sem persistir */ }
+}
+async function carregarSlidesSalvos(){
+  try{
+    const db = await abrirBanco();
+    const lista = await new Promise((res, rej) => {
+      const tx = db.transaction('cfg', 'readonly');
+      const rq = tx.objectStore('cfg').get('slides');
+      rq.onsuccess = () => res(rq.result || []);
+      rq.onerror = () => rej(rq.error);
+    });
+    if (lista.length){
+      slides = lista; idxSlide = 0;
+      atualizarRotuloSlides();
+      if (localStorage.getItem('slidesAuto') === '1') alternarSlides();  // já começa rodando
+    }
+  }catch(e){}
+}
+function atualizarRotuloSlides(){
+  const b = document.getElementById('btnSlides');
+  if (b && !slidesAtivos) b.textContent = slides.length ? `▶ Iniciar slides (${slides.length})` : '▶ Iniciar slides';
+  const inf = document.getElementById('infoSlidesSalvos');
+  if (inf) inf.textContent = slides.length ? `${slides.length} slides salvos` : 'nenhum slide salvo';
+}
+async function limparSlides(){
+  if (!confirm('Remover os slides salvos deste computador?')) return;
+  slides = []; idxSlide = 0;
+  if (slidesAtivos) alternarSlides();
+  await salvarSlides([]);
+  localStorage.removeItem('slidesAuto');
+  document.getElementById('chkAuto').checked = false;
+  atualizarRotuloSlides();
+  document.getElementById('areaSlides').innerHTML = '<div id="marcaOcioso">Aguardando chamadas…</div>';
+}
+
 document.getElementById('arqSlides').addEventListener('change', async ev => {
   slides = []; idxSlide = 0;
   for (const f of ev.target.files){
@@ -596,8 +804,9 @@ document.getElementById('arqSlides').addEventListener('change', async ev => {
       }));
     }
   }
-  document.getElementById('btnSlides').textContent =
-    slides.length ? `▶ Iniciar slides (${slides.length})` : '▶ Iniciar slides';
+  await salvarSlides(slides);          // ficam gravados para os próximos dias
+  atualizarRotuloSlides();
+  ev.target.value = '';                 // permite recarregar o mesmo arquivo depois
 });
 
 function alternarSlides(){
@@ -631,9 +840,77 @@ async function atualizarAdmin(){
     document.getElementById('stCom').textContent =
       `${Math.max(e.comum - e.limites.baseComum, 0)} de ${e.limites.maxComum - e.limites.baseComum} chamadas`;
     document.getElementById('pinCampo').classList.toggle('oculto', !pinNecessario);
+    carregarRelatorio();
   }catch(err){
     document.getElementById('msgAdmin').textContent = 'Falha ao carregar o estado.';
   }
+}
+
+/* ---- Relatório e exportação ---- */
+let logCache = [];
+
+async function carregarRelatorio(){
+  const alvo = document.getElementById('resumoRel');
+  try{
+    const r = await api('POST', { acao: 'relatorio' });
+    logCache = (r.log || []).filter(c => !c.intervalo);
+    if (!logCache.length){ alvo.textContent = 'Nenhuma chamada registrada ainda.'; return; }
+
+    const porGuiche = {};
+    let pri = 0, com = 0;
+    let menor = Infinity, maior = 0;
+    for (const c of logCache){
+      porGuiche[c.guiche] = (porGuiche[c.guiche] || 0) + 1;
+      if (c.tipo === 'prioridade') pri++; else com++;
+      if (c.ts < menor) menor = c.ts;
+      if (c.ts > maior) maior = c.ts;
+    }
+    const horas = (maior - menor) / 3600000;
+    const ritmo = horas > 0.05 ? (logCache.length / horas).toFixed(1) : '—';
+    const guiches = Object.entries(porGuiche)
+      .sort((a,b) => b[1] - a[1])
+      .map(([g,n]) => `guichê ${g}: ${n}`).join(' · ');
+
+    alvo.innerHTML =
+      `<b>${logCache.length}</b> chamadas registradas<br>` +
+      `${pri} prioritárias · ${com} comuns<br>` +
+      `Ritmo médio: ${ritmo} por hora<br>` +
+      `Por atendente: ${guiches}`;
+  }catch(err){ alvo.textContent = 'Não foi possível carregar o relatório.'; }
+}
+
+function baixarCsv(){
+  if (!logCache.length){ alert('Não há chamadas registradas para exportar.'); return; }
+  const linhas = [['data','hora','senha','tipo','guiche','avulsa']];
+  // do mais antigo para o mais recente
+  for (const c of [...logCache].sort((a,b) => a.ts - b.ts)){
+    const d = new Date(c.ts);
+    linhas.push([
+      d.toLocaleDateString('pt-BR'),
+      d.toLocaleTimeString('pt-BR'),
+      c.senha,
+      c.tipo === 'prioridade' ? 'Prioridade' : 'Comum',
+      c.guiche,
+      c.avulsa ? 'sim' : 'nao',
+    ]);
+  }
+  const csv = '\uFEFF' + linhas.map(l => l.join(';')).join('\r\n');  // ; e BOM: abre certo no Excel pt-BR
+  const url = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' }));
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `chamadas-${new Date().toISOString().slice(0,10)}.csv`;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+async function limparRelatorio(){
+  if (!confirm('Apagar TODO o registro de chamadas? O relatório não poderá ser recuperado.')) return;
+  const pin = pinNecessario ? document.getElementById('pinCampo').value : undefined;
+  try{
+    const r = await api('POST', { acao: 'limparLog', pin });
+    if (r.erro) alert(r.erro);
+    else carregarRelatorio();
+  }catch(err){ alert('Falha de conexão.'); }
 }
 
 async function resetar(){
