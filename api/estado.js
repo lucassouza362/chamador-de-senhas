@@ -16,6 +16,7 @@ const K = {
   historico: 'chamador:historico',   // lista de chamadas (mais recente primeiro)
   seq: 'chamador:seq',               // id incremental de cada chamada (fila de anúncios)
   log: 'chamador:log',               // registro permanente p/ relatório (não some no reset)
+  config: 'chamador:config',         // ajustes do painel controláveis à distância
 };
 
 // Grava a chamada no histórico de exibição e no log do relatório
@@ -43,17 +44,20 @@ export default async function handler(req, res) {
 
   try {
     if (req.method === 'GET') {
-      const [pri, com, hist] = await Promise.all([
+      const [pri, com, hist, cfg] = await Promise.all([
         redis.get(K.prioridade),
         redis.get(K.comum),
         redis.lrange(K.historico, 0, 14),
+        redis.get(K.config),
       ]);
       const prioridade = Math.min(Number(pri) || 0, MAX_PRIORIDADE);
       const comum = Math.min(Math.max(Number(com) || BASE_COMUM, BASE_COMUM), MAX_COMUM);
+      const config = (typeof cfg === 'string' ? parseItem(cfg) : cfg) || {};
       return res.status(200).json({
         prioridade,
         comum,
         historico: (hist || []).map(parseItem).filter(Boolean),
+        config: { zoom: Number(config.zoom) || 100 },
         pinNecessario: Boolean(process.env.ADMIN_PIN),
         limites: { maxPrioridade: MAX_PRIORIDADE, baseComum: BASE_COMUM, maxComum: MAX_COMUM },
       });
@@ -131,6 +135,20 @@ export default async function handler(req, res) {
         await redis.lpush(K.historico, JSON.stringify(chamada));
         await redis.ltrim(K.historico, 0, 29);
         return res.status(200).json({ ok: true, chamada });
+      }
+
+      // ---- Ajustes do painel controláveis de qualquer aparelho ----
+      if (acao === 'config') {
+        const atual = parseItem(await redis.get(K.config)) || {};
+        if (body.zoom !== undefined) {
+          const z = Number(body.zoom);
+          if (!Number.isFinite(z) || z < 100 || z > 200) {
+            return res.status(200).json({ ok: false, erro: 'Zoom deve ficar entre 100 e 200.' });
+          }
+          atual.zoom = Math.round(z);
+        }
+        await redis.set(K.config, JSON.stringify(atual));
+        return res.status(200).json({ ok: true, config: atual });
       }
 
       // ---- Relatório: devolve o log completo para exportar em CSV ----
