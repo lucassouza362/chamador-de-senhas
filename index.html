@@ -122,6 +122,26 @@
   #barraPainel .sep{width:1px;height:24px;background:var(--borda)}
   #barraPainel label{color:var(--suave);display:flex;align-items:center;gap:6px}
 
+  /* ---------- Configurações ---------- */
+  #telaConfig{min-height:100vh;display:flex;flex-direction:column;align-items:center;
+    justify-content:center;gap:16px;padding:32px 24px}
+  .cabConfig{text-align:center;max-width:420px}
+  .cabConfig h2{font-weight:600;font-size:1.3rem;margin-bottom:6px}
+  .blocoCfg{background:var(--panel);border:1px solid var(--borda);border-radius:14px;
+    padding:20px 24px;display:flex;flex-direction:column;gap:12px;width:100%;max-width:460px}
+  .blocoCfg h3{font-size:.95rem;font-weight:600}
+  .linhaCfg{display:flex;gap:12px;align-items:center;flex-wrap:wrap}
+  .linhaCfg select{background:var(--panel2);color:var(--texto);border:1px solid var(--borda);
+    border-radius:8px;padding:10px;font-size:.95rem;max-width:260px}
+  .linhaCfg button{background:var(--panel2);color:var(--texto);border:1px solid var(--borda);
+    padding:10px 16px;font-size:.9rem}
+  .linhaCfg button:hover{border-color:var(--azul)}
+  .linhaCfg label{color:var(--suave);display:flex;align-items:center;gap:8px}
+  .linhaCfg .check{color:var(--texto)}
+  .linhaCfg input[type=file]{color:var(--suave);font-size:.85rem;max-width:100%}
+  .btnVoltarPainel{background:linear-gradient(180deg,var(--azul),var(--azul2)) !important;
+    color:#fff !important;border:none !important;font-weight:700;padding:12px 24px !important}
+
   /* ---------- Admin ---------- */
   #telaAdmin{min-height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:20px;padding:24px}
   .caixaAdmin{background:var(--panel);border:1px solid var(--borda);border-radius:14px;padding:26px;min-width:320px;
@@ -156,9 +176,10 @@
     </button>
     <button class="cartao" onclick="irPara('admin')">
       <span class="ic">⚙️</span><b>Administração</b>
-      <span>Reiniciar o ciclo de senhas para o próximo dia</span>
+      <span>Reiniciar o ciclo de senhas e baixar o relatório</span>
     </button>
   </div>
+  <button class="linkVoltar" onclick="irPara('config')">⚙️ Configurações deste computador (som, voz e slides)</button>
 </div>
 
 <!-- ===================== ESCOLHA DE GUICHÊ ===================== -->
@@ -242,40 +263,73 @@
 
   <div id="barraPainel">
     <button onclick="telaCheia()">⛶ Tela cheia</button>
+    <button id="btnSlides" onclick="alternarSlides()">▶ Iniciar slides</button>
     <span class="sep"></span>
-    <label>Som
+    <button onclick="irPara('config')">⚙️ Configurações</button>
+    <button onclick="irPara('home')">✕ Sair</button>
+  </div>
+</div>
+
+<!-- ===================== CONFIGURAÇÕES ===================== -->
+<div id="telaConfig" class="oculto">
+  <div class="cabConfig">
+    <h2>⚙️ Configurações do painel</h2>
+    <p class="dica">Valem para <b>este computador</b>. O notebook do projetor tem as suas;
+       cada atendente, as dele.</p>
+  </div>
+
+  <div class="blocoCfg">
+    <h3>🔔 Som de aviso</h3>
+    <div class="linhaCfg">
       <select id="selSom">
         <option value="dingdong">Ding-dong</option>
         <option value="sino">Sino</option>
         <option value="trinado">Trinado</option>
       </select>
-    </label>
-    <button onclick="tocarSom()">▶ Testar</button>
-    <label><input type="checkbox" id="chkVoz" checked> Voz</label>
-    <label>
+      <button onclick="tocarSom()">▶ Testar som</button>
+    </div>
+  </div>
+
+  <div class="blocoCfg">
+    <h3>🗣 Voz do anúncio</h3>
+    <div class="linhaCfg">
+      <label class="check"><input type="checkbox" id="chkVoz" checked> Anunciar por voz</label>
+    </div>
+    <div class="linhaCfg">
       <select id="selVoz"><option value="">Voz automática (pt)</option></select>
-    </label>
-    <button onclick="testarVoz()">🗣 Testar voz</button>
-    <span class="sep"></span>
-    <label>Slides
+      <button onclick="testarVoz()">🗣 Testar voz</button>
+    </div>
+    <span class="dica">No Edge costumam aparecer as vozes "Natural", mais parecidas com a fala humana.</span>
+  </div>
+
+  <div class="blocoCfg">
+    <h3>🖼 Slides do projetor</h3>
+    <div class="linhaCfg">
       <input type="file" id="arqSlides" accept="image/*,application/pdf" multiple>
-    </label>
-    <span id="infoSlidesSalvos" style="color:var(--suave);font-size:.8rem">nenhum slide salvo</span>
-    <button onclick="limparSlides()">🗑 Limpar</button>
-    <label title="Iniciar os slides sozinho ao abrir o painel">
-      <input type="checkbox" id="chkAuto"> Auto
-    </label>
-    <label>Intervalo
-      <select id="selIntervalo">
-        <option value="5">5 s</option>
-        <option value="8" selected>8 s</option>
-        <option value="12">12 s</option>
-        <option value="20">20 s</option>
-      </select>
-    </label>
-    <button id="btnSlides" onclick="alternarSlides()">▶ Iniciar slides</button>
-    <span class="sep"></span>
-    <button onclick="irPara('home')">✕ Sair</button>
+    </div>
+    <div class="linhaCfg">
+      <span id="infoSlidesSalvos" class="dica">nenhum slide salvo</span>
+      <button onclick="limparSlides()">🗑 Limpar slides</button>
+    </div>
+    <div class="linhaCfg">
+      <label class="check"><input type="checkbox" id="chkAuto"> Iniciar sozinho ao abrir o painel</label>
+    </div>
+    <div class="linhaCfg">
+      <label>Trocar slide a cada
+        <select id="selIntervalo">
+          <option value="5">5 s</option>
+          <option value="8" selected>8 s</option>
+          <option value="12">12 s</option>
+          <option value="20">20 s</option>
+        </select>
+      </label>
+    </div>
+    <span class="dica">Os slides ficam gravados neste computador — não precisa carregar de novo amanhã.</span>
+  </div>
+
+  <div class="linhaCfg">
+    <button class="btnVoltarPainel" onclick="irPara('painel')">← Voltar ao painel</button>
+    <button class="linkVoltar" onclick="irPara('home')">Início</button>
   </div>
 </div>
 
@@ -303,7 +357,7 @@
 /* ================================================================
    NAVEGAÇÃO
 ================================================================ */
-const telas = ['home','guiche','atendente','painel','admin'];
+const telas = ['home','guiche','atendente','painel','config','admin'];
 let guiche = localStorage.getItem('guiche') || '';
 let pinNecessario = false;
 
@@ -312,7 +366,10 @@ function irPara(t){
   document.getElementById('tela' + t[0].toUpperCase() + t.slice(1)).classList.remove('oculto');
   location.hash = t === 'home' ? '' : t;
   if (t === 'atendente') iniciarAtendente();
-  if (t === 'painel') iniciarPainel(); else pararPainel();
+  if (t === 'painel') iniciarPainel();
+  // ao ir para configurações o painel continua rodando por trás (não perde as chamadas)
+  else if (t !== 'config') pararPainel();
+  if (t === 'config') abrirConfig();
   if (t === 'admin') atualizarAdmin();
 }
 
@@ -511,7 +568,21 @@ document.addEventListener('visibilitychange', () => {
   if (document.visibilityState === 'visible' && pollPainel) pedirWakeLock();
 });
 
+function abrirConfig(){
+  // reflete o que já está salvo neste computador
+  const somSalvo = localStorage.getItem('somPainel');
+  if (somSalvo) document.getElementById('selSom').value = somSalvo;
+  const intSalvo = localStorage.getItem('intervaloSlides');
+  if (intSalvo) document.getElementById('selIntervalo').value = intSalvo;
+  document.getElementById('chkAuto').checked = localStorage.getItem('slidesAuto') === '1';
+  document.getElementById('chkVoz').checked = localStorage.getItem('vozAtiva') !== '0';
+  if (!slides.length) carregarSlidesSalvos(true);   // true = só conta, não inicia
+  else atualizarRotuloSlides();
+  montarVozes();
+}
+
 function iniciarPainel(){
+  if (pollPainel) return;   // já estava rodando (ex.: voltando das configurações)
   clearInterval(pollPainel);
   ultimoId = null; filaAnuncios = []; anunciando = false;
   cicloPainel();
@@ -524,6 +595,7 @@ function iniciarPainel(){
   if (intSalvo) document.getElementById('selIntervalo').value = intSalvo;
   const somSalvo = localStorage.getItem('somPainel');
   if (somSalvo) document.getElementById('selSom').value = somSalvo;
+  document.getElementById('chkVoz').checked = localStorage.getItem('vozAtiva') !== '0';
   if (!slides.length) carregarSlidesSalvos();
   else if (!slidesAtivos && localStorage.getItem('slidesAuto') === '1') alternarSlides();
 }
@@ -711,6 +783,9 @@ document.getElementById('selIntervalo').addEventListener('change', ev => {
 document.getElementById('selSom').addEventListener('change', ev => {
   localStorage.setItem('somPainel', ev.target.value);
 });
+document.getElementById('chkVoz').addEventListener('change', ev => {
+  localStorage.setItem('vozAtiva', ev.target.checked ? '1' : '0');
+});
 
 /* ---- Barra de controle escondida ---- */
 let timerBarra = null;
@@ -747,7 +822,7 @@ async function salvarSlides(lista){
     });
   }catch(e){ /* sem espaço ou modo privado: segue sem persistir */ }
 }
-async function carregarSlidesSalvos(){
+async function carregarSlidesSalvos(apenasContar){
   try{
     const db = await abrirBanco();
     const lista = await new Promise((res, rej) => {
@@ -759,8 +834,8 @@ async function carregarSlidesSalvos(){
     if (lista.length){
       slides = lista; idxSlide = 0;
       atualizarRotuloSlides();
-      if (localStorage.getItem('slidesAuto') === '1') alternarSlides();  // já começa rodando
-    }
+      if (!apenasContar && localStorage.getItem('slidesAuto') === '1') alternarSlides();
+    } else atualizarRotuloSlides();
   }catch(e){}
 }
 function atualizarRotuloSlides(){
