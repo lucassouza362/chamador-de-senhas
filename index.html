@@ -906,10 +906,19 @@ function tomVoz(){
 async function testarVoz(){
   const st = document.getElementById('statusVoz');
   if (vozInternetAtiva()){
+    const nome = document.getElementById('selVozNet').selectedOptions[0];
     st.textContent = 'gerando áudio…'; st.style.color = 'var(--suave)';
-    try{ await falarPelaInternet('Senha prioritária 42.'); marcarFonteVoz('ok'); return; }
-    catch(e){ marcarFonteVoz('reserva'); }
-  } else marcarFonteVoz('');
+    try{
+      await falarPelaInternet('Senha prioritária 42.');
+      st.textContent = `✓ ${nome ? nome.textContent : 'voz'} funcionando`;
+      st.style.color = 'var(--verde)';
+      return;
+    }catch(e){
+      st.textContent = `⚠️ a voz "${nome ? nome.textContent : ''}" não respondeu — escolha outra. ` +
+                       'Por ora será usada a voz do computador.';
+      st.style.color = 'var(--ambar)';
+    }
+  } else st.textContent = '';
   falarPeloNavegador('Senha prioritária 42.');
 }
 
@@ -1092,56 +1101,44 @@ async function prepararVozes(estado){
 }
 
 /* ---- Escolha da fonte de voz ---- */
-// lista embutida: o seletor funciona mesmo se o servidor não responder
-const VOZES_NET = [
-  { id:'francisca', nome:'Francisca',  grupo:'Brasil · femininas' },
-  { id:'thalita',   nome:'Thalita',    grupo:'Brasil · femininas' },
-  { id:'brenda',    nome:'Brenda',     grupo:'Brasil · femininas' },
-  { id:'elza',      nome:'Elza',       grupo:'Brasil · femininas' },
-  { id:'giovanna',  nome:'Giovanna',   grupo:'Brasil · femininas' },
-  { id:'leila',     nome:'Leila',      grupo:'Brasil · femininas' },
-  { id:'leticia',   nome:'Letícia',    grupo:'Brasil · femininas' },
-  { id:'manuela',   nome:'Manuela',    grupo:'Brasil · femininas' },
-  { id:'yara',      nome:'Yara',       grupo:'Brasil · femininas' },
-  { id:'antonio',   nome:'Antônio',    grupo:'Brasil · masculinas' },
-  { id:'donato',    nome:'Donato',     grupo:'Brasil · masculinas' },
-  { id:'fabio',     nome:'Fábio',      grupo:'Brasil · masculinas' },
-  { id:'humberto',  nome:'Humberto',   grupo:'Brasil · masculinas' },
-  { id:'julio',     nome:'Júlio',      grupo:'Brasil · masculinas' },
-  { id:'nicolau',   nome:'Nicolau',    grupo:'Brasil · masculinas' },
-  { id:'valerio',   nome:'Valério',    grupo:'Brasil · masculinas' },
-  { id:'raquel',    nome:'Raquel',     grupo:'Portugal' },
-  { id:'fernanda',  nome:'Fernanda',   grupo:'Portugal' },
-  { id:'duarte',    nome:'Duarte',     grupo:'Portugal' },
+// reserva mínima, usada só se o servidor não responder
+const VOZES_RESERVA = [
+  { id:'francisca', nome:'Francisca', regiao:'Brasil', feminina:true },
+  { id:'antonio',   nome:'Antonio',   regiao:'Brasil', feminina:false },
 ];
 
-function montarVozesInternet(){
+async function montarVozesInternet(){
   const sel = document.getElementById('selVozNet');
-  if (sel.options.length) return;
-  const grupos = [...new Set(VOZES_NET.map(v => v.grupo))];
-  sel.innerHTML = grupos.map(g =>
-    `<optgroup label="${g}">` +
-    VOZES_NET.filter(v => v.grupo === g)
-      .map(v => `<option value="${v.id}">${v.nome}</option>`).join('') +
-    '</optgroup>').join('');
-  sel.value = vozInternetId();
-  verificarServicoVoz();
-}
-
-// confere se o endpoint de voz está no ar e avisa em bom português se não estiver
-async function verificarServicoVoz(){
   const st = document.getElementById('statusVoz');
-  st.textContent = 'verificando serviço de voz…'; st.style.color = 'var(--suave)';
+  if (sel.options.length) return;
+
+  st.textContent = 'consultando vozes disponíveis…'; st.style.color = 'var(--suave)';
+  let vozes = VOZES_RESERVA, doServico = false;
   try{
     const r = await fetch('/api/voz?listar');
-    if (!r.ok) throw new Error('HTTP ' + r.status);
-    const d = await r.json();
-    st.textContent = `✓ serviço no ar — ${d.vozes.length} vozes disponíveis`;
+    if (r.ok){
+      const d = await r.json();
+      if (d.vozes && d.vozes.length){ vozes = d.vozes; doServico = true; }
+    }
+  }catch(e){}
+
+  // agrupa por região e gênero, usando o que o serviço informou
+  const grupo = v => `${v.regiao || 'Brasil'} · ${v.feminina === false ? 'masculinas' : 'femininas'}`;
+  const grupos = [...new Set(vozes.map(grupo))].sort();
+  sel.innerHTML = grupos.map(g =>
+    `<optgroup label="${g}">` +
+    vozes.filter(v => grupo(v) === g)
+      .map(v => `<option value="${v.id}">${v.nome}${v.multilingue ? ' (multilíngue)' : ''}</option>`)
+      .join('') + '</optgroup>').join('');
+  sel.value = vozInternetId();
+  if (!sel.value && sel.options.length) sel.selectedIndex = 0;
+
+  if (doServico){
+    st.textContent = `✓ ${vozes.length} vozes disponíveis no serviço`;
     st.style.color = 'var(--verde)';
-  }catch(e){
-    st.innerHTML = '⚠️ o serviço de voz da internet não respondeu. Confira se os arquivos ' +
-                   '<b>api/voz.js</b> e <b>package.json</b> foram publicados. Por ora o anúncio ' +
-                   'usa a voz do computador.';
+  } else {
+    st.innerHTML = '⚠️ não consegui consultar a lista de vozes. Confira se <b>api/voz.js</b> ' +
+                   'e <b>package.json</b> foram publicados.';
     st.style.color = 'var(--ambar)';
   }
 }
