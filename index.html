@@ -1,109 +1,1612 @@
-import { MsEdgeTTS, OUTPUT_FORMAT } from 'msedge-tts';
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Chamador de Senhas</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+<style>
+  :root{
+    --bg:#0d1420; --panel:#16202f; --panel2:#1d2a3d; --borda:#2b3b52;
+    --texto:#e8eef7; --suave:#8fa3bd;
+    --azul:#2e7dd1; --azul2:#1f5fa8;
+    --ambar:#e8a020; --ambar2:#c07f0a;
+    --verde:#2fae6a; --vermelho:#d64545;
+    font-size:16px;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{background:var(--bg);color:var(--texto);font-family:"Segoe UI",system-ui,Arial,sans-serif;min-height:100vh}
+  button{font-family:inherit;cursor:pointer;border:none;border-radius:10px}
+  .oculto{display:none !important}
 
-export const config = { maxDuration: 25 };
+  /* ---------- Home ---------- */
+  #telaHome{min-height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:28px;padding:24px}
+  #telaHome h1{font-size:1.7rem;font-weight:600;letter-spacing:.02em}
+  #telaHome p{color:var(--suave)}
+  .cartoes{display:flex;gap:18px;flex-wrap:wrap;justify-content:center}
+  .cartao{background:var(--panel);border:1px solid var(--borda);border-radius:14px;padding:28px 26px;width:230px;
+    color:var(--texto);text-align:left;display:flex;flex-direction:column;gap:8px;transition:border-color .15s, transform .15s}
+  .cartao:hover{border-color:var(--azul);transform:translateY(-2px)}
+  .cartao .ic{font-size:1.9rem}
+  .cartao b{font-size:1.05rem}
+  .cartao span{color:var(--suave);font-size:.85rem;line-height:1.35}
 
-// Lista de reserva, usada só se a consulta ao serviço falhar
-const RESERVA = [
-  'pt-BR-FranciscaNeural', 'pt-BR-AntonioNeural',
-  'pt-BR-ThalitaMultilingualNeural', 'pt-PT-RaquelNeural', 'pt-PT-DuarteNeural',
-];
+  /* ---------- Atendente ---------- */
+  #telaGuiche, #telaAtendente{min-height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:22px;padding:24px}
+  #telaGuiche h2{font-weight:600}
+  .gradeGuiches{display:grid;grid-template-columns:repeat(5,74px);gap:12px}
+  .gradeGuiches button{height:64px;font-size:1.3rem;font-weight:700;background:var(--panel2);color:var(--texto);border:1px solid var(--borda)}
+  .gradeGuiches button:hover{border-color:var(--azul);background:#223350}
+  .linkVoltar{background:none;color:var(--suave);text-decoration:underline;font-size:.9rem}
 
-// "pt-BR-FranciscaNeural" → { id: 'francisca', nome: 'Francisca', ... }
-function descrever(nomeTecnico, genero) {
-  const m = /^([a-z]{2})-([A-Z]{2})-(.+?)(Multilingual)?Neural$/.exec(nomeTecnico);
-  if (!m) return null;
-  const [, idioma, regiao, curto, multi] = m;
-  const nomesRegiao = {
-    BR: 'Brasil', PT: 'Portugal', US: 'EUA', GB: 'Reino Unido', FR: 'França',
-    DE: 'Alemanha', ES: 'Espanha', IT: 'Itália', JP: 'Japão', CN: 'China',
-    KR: 'Coreia', IN: 'Índia', CA: 'Canadá', AU: 'Austrália', NL: 'Holanda',
-  };
-  return {
-    id: curto.toLowerCase() + (idioma === 'pt' ? '' : '-' + idioma + regiao.toLowerCase()),
-    nome: curto,
-    tecnico: nomeTecnico,
-    regiao: nomesRegiao[regiao] || `${idioma}-${regiao}`,
-    portugues: idioma === 'pt',
-    feminina: genero ? genero.toLowerCase() === 'female' : undefined,
-    multilingue: Boolean(multi),
-  };
+  #telaAtendente{gap:16px}
+  #cabAtend{display:flex;align-items:center;gap:12px;color:var(--suave)}
+  #cabAtend b{color:var(--texto);font-size:1.2rem}
+  #ultimaAtend{background:var(--panel);border:1px solid var(--borda);border-radius:14px;padding:18px 40px;text-align:center;min-width:280px}
+  #ultimaAtend .rot{color:var(--suave);font-size:.8rem;text-transform:uppercase;letter-spacing:.1em}
+  #ultimaAtend .num{font-size:4.2rem;font-weight:800;line-height:1.1}
+  #ultimaAtend .tag{font-size:.85rem;font-weight:700;letter-spacing:.06em}
+  .tagPri{color:var(--ambar)} .tagCom{color:var(--azul)}
+  .botoesChamar{display:flex;gap:14px;flex-wrap:wrap;justify-content:center}
+  .btnGrande{padding:26px 34px;font-size:1.25rem;font-weight:700;color:#fff;min-width:230px;
+    display:flex;flex-direction:column;gap:6px;align-items:center}
+  .btnGrande small{font-weight:500;font-size:.8rem;opacity:.85}
+  #btnPrioridade{background:linear-gradient(180deg,var(--ambar),var(--ambar2))}
+  #btnComum{background:linear-gradient(180deg,var(--azul),var(--azul2))}
+  .btnGrande:disabled{opacity:.4;cursor:not-allowed}
+  #btnRepetir{background:var(--panel2);color:var(--texto);border:1px solid var(--borda);padding:12px 26px;font-size:1rem}
+  #avisoAtend{min-height:22px;color:var(--vermelho);font-weight:600}
+  .avisoOffline{background:#3a2410;border:1px solid var(--ambar);color:var(--ambar);
+    border-radius:10px;padding:10px 18px;font-weight:600;font-size:.9rem;text-align:center}
+
+  #caixaEspecifica{background:var(--panel);border:1px solid var(--borda);border-radius:14px;
+    padding:16px 22px;display:flex;flex-direction:column;gap:10px;min-width:300px;max-width:380px}
+  #caixaEspecifica h3{font-size:.8rem;color:var(--suave);text-transform:uppercase;letter-spacing:.1em;text-align:center;font-weight:600}
+  .linhaEspec{display:flex;gap:10px;justify-content:center}
+  .linhaEspec input{width:100px;background:var(--panel2);border:1px solid var(--borda);border-radius:8px;
+    color:var(--texto);padding:10px;font-size:1.3rem;font-weight:700;text-align:center}
+  .linhaEspec button{background:var(--panel2);color:var(--texto);border:1px solid var(--borda);padding:10px 22px;font-size:1rem;font-weight:600}
+  .linhaEspec button:hover{border-color:var(--azul)}
+  .dica{color:var(--suave);font-size:.75rem;text-align:center;line-height:1.35}
+
+  #andamento{display:flex;gap:22px;background:var(--panel);border:1px solid var(--borda);
+    border-radius:12px;padding:12px 22px;font-size:.85rem;color:var(--suave)}
+  #andamento b{color:var(--texto);font-size:1.05rem}
+  #andamento div{text-align:center}
+
+  #caixaIntervalo{background:var(--panel);border:1px solid var(--borda);border-radius:14px;
+    padding:18px 22px;display:flex;flex-direction:column;gap:12px;min-width:300px;max-width:380px}
+  #caixaIntervalo h3{font-size:.8rem;color:var(--suave);text-transform:uppercase;letter-spacing:.1em;text-align:center;font-weight:600}
+  .linhaIntervalo{display:flex;gap:14px;justify-content:center}
+  .linhaIntervalo label{color:var(--suave);display:flex;align-items:center;gap:8px}
+  .linhaIntervalo input{width:80px;background:var(--panel2);border:1px solid var(--borda);border-radius:8px;
+    color:var(--texto);padding:10px;font-size:1.2rem;font-weight:700;text-align:center}
+  #intMsg{background:var(--panel2);border:1px solid var(--borda);border-radius:8px;
+    color:var(--texto);padding:10px 12px;font-size:.9rem;width:100%}
+  #btnIntervalo{background:linear-gradient(180deg,var(--verde),#1f7d4a);color:#fff;padding:14px;font-size:1rem;font-weight:700}
+
+  /* ---------- Painel (projetor) ---------- */
+  #telaPainel{position:fixed;inset:0;background:#000;overflow:hidden}
+  #areaSlides{position:absolute;top:0;left:0;right:0;bottom:0;display:flex;align-items:center;justify-content:center;overflow:hidden}
+  #telaPainel.comFaixa #areaSlides{bottom:76px}  /* espaço reservado: a faixa nunca cobre o slide */
+  #areaSlides img{max-width:100%;max-height:100%;object-fit:contain}
+  #marcaOcioso{color:#22344f;font-size:2rem;font-weight:600;letter-spacing:.05em;text-align:center}
+
+  #faixaHist{position:absolute;left:0;right:0;bottom:0;height:76px;background:rgba(10,16,26,.96);
+    border-top:1px solid var(--borda);display:none;align-items:center;gap:20px;padding:0 22px;z-index:5}
+  #telaPainel.comFaixa #faixaHist{display:flex}
+  #faixaHist h3{color:var(--suave);font-size:.7rem;text-transform:uppercase;letter-spacing:.14em;white-space:nowrap}
+  #faixaItens{display:flex;gap:14px;align-items:center;flex:1;overflow:hidden}
+  .itemHist{background:var(--panel);border:1px solid var(--borda);border-radius:10px;
+    padding:6px 16px;display:flex;align-items:baseline;gap:10px;white-space:nowrap}
+  .itemHist .n{font-size:1.9rem;font-weight:800;line-height:1}
+  .itemHist .g{color:var(--suave);font-size:.85rem}
+  .itemHist.pri .n{color:var(--ambar)}
+  .itemHist.int .n{color:var(--verde)}
+
+  #overlayChamada{position:absolute;inset:0;background:rgba(5,10,18,.96);z-index:8;
+    display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px}
+  #overlayChamada .rot{font-size:2.2vw;color:var(--suave);text-transform:uppercase;letter-spacing:.25em}
+  #overlayChamada .tag{font-size:3vw;font-weight:800;letter-spacing:.1em}
+  #overlayChamada .num{font-size:22vw;font-weight:900;line-height:1;animation:pulsa 1s ease-in-out infinite alternate}
+  #overlayChamada .gui{font-size:5vw;font-weight:700;color:var(--texto);margin-top:1vw}
+  @keyframes pulsa{from{transform:scale(1)}to{transform:scale(1.05)}}
+
+  #barraPainel{position:absolute;top:0;left:0;right:0;z-index:10;background:rgba(13,20,32,.95);
+    border-bottom:1px solid var(--borda);display:flex;gap:10px;align-items:center;padding:10px 14px;flex-wrap:wrap;
+    transform:translateY(-110%);transition:transform .25s}
+  #barraPainel.visivel{transform:translateY(0)}
+  #barraPainel button,#barraPainel select,#barraPainel input,#barraPainel label{font-size:.85rem}
+  #barraPainel button{background:var(--panel2);color:var(--texto);border:1px solid var(--borda);padding:8px 12px;border-radius:8px}
+  #barraPainel select{background:var(--panel2);color:var(--texto);border:1px solid var(--borda);padding:7px;border-radius:8px}
+  #barraPainel .sep{width:1px;height:24px;background:var(--borda)}
+  #barraPainel label{color:var(--suave);display:flex;align-items:center;gap:6px}
+
+  /* ---------- Configurações ---------- */
+  #telaConfig{min-height:100vh;display:flex;flex-direction:column;align-items:center;
+    justify-content:center;gap:16px;padding:32px 24px}
+  .cabConfig{text-align:center;max-width:420px}
+  .cabConfig h2{font-weight:600;font-size:1.3rem;margin-bottom:6px}
+  .blocoCfg{background:var(--panel);border:1px solid var(--borda);border-radius:14px;
+    padding:20px 24px;display:flex;flex-direction:column;gap:12px;width:100%;max-width:460px}
+  .blocoCfg h3{font-size:.95rem;font-weight:600}
+  .linhaCfg{display:flex;gap:12px;align-items:center;flex-wrap:wrap}
+  .linhaCfg select{background:var(--panel2);color:var(--texto);border:1px solid var(--borda);
+    border-radius:8px;padding:10px;font-size:.95rem;max-width:260px}
+  .linhaCfg button{background:var(--panel2);color:var(--texto);border:1px solid var(--borda);
+    padding:10px 16px;font-size:.9rem}
+  .linhaCfg button:hover{border-color:var(--azul)}
+  .linhaCfg label{color:var(--suave);display:flex;align-items:center;gap:8px}
+  .linhaCfg .check{color:var(--texto)}
+  .linhaCfg input[type=file]{color:var(--suave);font-size:.85rem;max-width:100%}
+  .linhaCfg input[type=range]{flex:1;min-width:140px;accent-color:var(--azul)}
+  .valZoom{font-weight:700;min-width:56px;text-align:center;
+    background:var(--panel2);border:1px solid var(--borda);border-radius:8px;padding:8px 6px;font-size:.9rem}
+  #previaZoom{width:100%;aspect-ratio:16/9;background:#000;border:1px solid var(--borda);
+    border-radius:10px;overflow:hidden;display:flex;align-items:center;justify-content:center}
+  #previaZoom img{max-width:100%;max-height:100%;object-fit:contain;transition:transform .12s}
+  .btnVoltarPainel{background:linear-gradient(180deg,var(--azul),var(--azul2)) !important;
+    color:#fff !important;border:none !important;font-weight:700;padding:12px 24px !important}
+
+  /* ---------- Admin ---------- */
+  #telaAdmin{min-height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:20px;padding:24px}
+  .caixaAdmin{background:var(--panel);border:1px solid var(--borda);border-radius:14px;padding:26px;min-width:320px;
+    display:flex;flex-direction:column;gap:16px}
+  .caixaAdmin h2{font-weight:600;font-size:1.15rem}
+  .linhaStat{display:flex;justify-content:space-between;color:var(--suave)}
+  .linhaStat b{color:var(--texto)}
+  #btnReset{background:var(--vermelho);color:#fff;padding:14px;font-size:1rem;font-weight:700}
+  #btnCsv{background:linear-gradient(180deg,var(--azul),var(--azul2));color:#fff;padding:14px;font-size:1rem;font-weight:700}
+  #btnSalvarFaixas{background:linear-gradient(180deg,var(--verde),#1f7d4a);color:#fff;padding:14px;font-size:1rem;font-weight:700}
+  .cfgSenha{color:var(--texto);display:flex;align-items:center;gap:10px;font-weight:600}
+  .linhaCfgSenha label{color:var(--suave);display:flex;align-items:center;justify-content:space-between;gap:12px;width:100%}
+  .linhaCfgSenha input{width:100px;background:var(--panel2);border:1px solid var(--borda);border-radius:8px;
+    color:var(--texto);padding:10px;font-size:1.1rem;font-weight:700;text-align:center}
+  #resumoFaixas{background:var(--panel2);border-radius:8px;padding:12px;text-align:center;line-height:1.5}
+  #msgFaixas{min-height:20px;font-size:.9rem;text-align:center}
+  #resumoRel{line-height:1.6;text-align:left}
+  #pinCampo{background:var(--panel2);border:1px solid var(--borda);border-radius:8px;color:var(--texto);
+    padding:11px;font-size:1rem;width:100%;text-align:center;letter-spacing:.3em}
+  #msgAdmin{min-height:20px;font-size:.9rem;text-align:center}
+</style>
+</head>
+<body>
+
+<!-- ===================== HOME ===================== -->
+<div id="telaHome">
+  <div style="text-align:center">
+    <h1>Chamador de Senhas</h1>
+    <p>Senhas físicas de 1 a 150 &nbsp;·&nbsp; 1 a 20 prioridade &nbsp;·&nbsp; 21 a 150 comum</p>
+  </div>
+  <div class="cartoes">
+    <button class="cartao" onclick="irPara('guiche')">
+      <span class="ic">🧑‍💼</span><b>Atendente</b>
+      <span>Chamar a próxima senha prioritária ou comum a partir do guichê</span>
+    </button>
+    <button class="cartao" onclick="irPara('painel')">
+      <span class="ic">📺</span><b>Painel</b>
+      <span>Tela do projetor com voz, som de aviso e slides</span>
+    </button>
+    <button class="cartao" onclick="irPara('admin')">
+      <span class="ic">⚙️</span><b>Administração</b>
+      <span>Reiniciar o ciclo de senhas e baixar o relatório</span>
+    </button>
+  </div>
+  <button class="linkVoltar" onclick="irPara('config')">⚙️ Configurações deste computador (som, voz e slides)</button>
+</div>
+
+<!-- ===================== ESCOLHA DE GUICHÊ ===================== -->
+<div id="telaGuiche" class="oculto">
+  <h2>Qual é o seu guichê?</h2>
+  <div class="gradeGuiches" id="gradeGuiches"></div>
+  <button class="linkVoltar" onclick="irPara('home')">Voltar</button>
+</div>
+
+<!-- ===================== ATENDENTE ===================== -->
+<div id="telaAtendente" class="oculto">
+  <div id="cabAtend">Guichê <b id="rotGuiche">1</b>
+    <button class="linkVoltar" onclick="irPara('guiche')">trocar</button>
+  </div>
+  <div class="avisoOffline oculto">⚠️ Sem conexão — as chamadas não estão sendo registradas</div>
+
+  <div id="ultimaAtend">
+    <div class="rot">Última senha chamada por você</div>
+    <div class="num" id="numAtend">—</div>
+    <div class="tag" id="tagAtend">&nbsp;</div>
+  </div>
+
+  <div id="andamento">
+    <div>Prioridade<br><b id="andPri">—</b></div>
+    <div>Comum<br><b id="andCom">—</b></div>
+    <div>Chamadas hoje<br><b id="andTotal">—</b></div>
+  </div>
+
+  <div class="botoesChamar">
+    <button class="btnGrande" id="btnPrioridade" onclick="chamar('prioridade')">
+      Chamar prioridade
+      <small id="restPri">senhas 1 a 20</small>
+    </button>
+    <button class="btnGrande" id="btnComum" onclick="chamar('comum')">
+      <span id="rotBtnComum">Chamar comum</span>
+      <small id="restCom">senhas 21 a 150</small>
+    </button>
+  </div>
+
+  <button id="btnRepetir" onclick="repetir()">🔁 Repetir última chamada</button>
+
+  <div id="caixaEspecifica">
+    <h3>Chamar uma senha específica</h3>
+    <div class="linhaEspec">
+      <input type="number" id="espNum" min="1" max="150" placeholder="nº">
+      <button id="btnEspecifica" onclick="chamarEspecifica()">Chamar</button>
+    </div>
+    <span class="dica">Para quem não estava na sala. Não altera a ordem da fila.</span>
+  </div>
+
+  <div id="caixaIntervalo">
+    <h3>Chamar intervalo de senhas</h3>
+    <div class="linhaIntervalo">
+      <label>De <input type="number" id="intDe" min="1" max="150" placeholder="21"></label>
+      <label>até <input type="number" id="intAte" min="1" max="150" placeholder="40"></label>
+    </div>
+    <input type="text" id="intMsg" placeholder="Dirijam-se à sala de atendimento" maxlength="120">
+    <button id="btnIntervalo" onclick="chamarIntervalo()">📣 Anunciar intervalo</button>
+  </div>
+
+  <div id="avisoAtend"></div>
+  <button class="linkVoltar" onclick="irPara('home')">Início</button>
+</div>
+
+<!-- ===================== PAINEL ===================== -->
+<div id="telaPainel" class="oculto">
+  <div id="areaSlides"><div id="marcaOcioso">Aguardando chamadas…</div></div>
+
+  <div id="faixaHist">
+    <h3>Últimas<br>senhas</h3>
+    <div id="faixaItens"></div>
+    <div class="avisoOffline oculto" id="offPainel" style="padding:6px 12px;font-size:.75rem">⚠️ sem conexão</div>
+  </div>
+
+  <div id="overlayChamada" class="oculto">
+    <div class="rot">Senha</div>
+    <div class="tag" id="ovTag"></div>
+    <div class="num" id="ovNum">—</div>
+    <div class="gui" id="ovGui"></div>
+  </div>
+
+  <div id="barraPainel">
+    <button onclick="telaCheia()">⛶ Tela cheia</button>
+    <button id="btnSlides" onclick="alternarSlides()">▶ Iniciar slides</button>
+    <span class="sep"></span>
+    <button onclick="irPara('config')">⚙️ Configurações</button>
+    <button onclick="irPara('home')">✕ Sair</button>
+  </div>
+</div>
+
+<!-- ===================== CONFIGURAÇÕES ===================== -->
+<div id="telaConfig" class="oculto">
+  <div class="cabConfig">
+    <h2>⚙️ Configurações do painel</h2>
+    <p class="dica">Valem para <b>este computador</b>. O notebook do projetor tem as suas;
+       cada atendente, as dele.</p>
+  </div>
+
+  <div class="blocoCfg">
+    <h3>🔔 Som de aviso</h3>
+    <div class="linhaCfg">
+      <select id="selSom">
+        <optgroup label="Campainhas">
+          <option value="dingdong">Ding-dong</option>
+          <option value="sino">Sino</option>
+          <option value="gongo">Gongo (grave e longo)</option>
+        </optgroup>
+        <optgroup label="Avisos públicos">
+          <option value="aeroporto">Aeroporto (2 tons)</option>
+          <option value="supermercado">Plim-plom</option>
+          <option value="trinado">Trinado (3 notas)</option>
+        </optgroup>
+        <optgroup label="Chamativos">
+          <option value="bipe">Bipe eletrônico</option>
+          <option value="sirene">Sirene curta</option>
+        </optgroup>
+        <optgroup label="Suaves">
+          <option value="xilofone">Xilofone</option>
+          <option value="harpa">Harpa</option>
+        </optgroup>
+        <optgroup label="Personalizado">
+          <option value="proprio">Meu arquivo de som</option>
+        </optgroup>
+      </select>
+      <button onclick="tocarSom()">▶ Testar som</button>
+    </div>
+    <div class="linhaCfg">
+      <label style="flex:1">Volume
+        <input type="range" id="rngVol" min="10" max="100" step="5" value="100">
+      </label>
+      <span id="valVol" class="valZoom">100%</span>
+    </div>
+    <div class="linhaCfg" id="linhaSomProprio" style="display:none">
+      <input type="file" id="arqSom" accept="audio/*">
+      <span id="infoSom" class="dica">nenhum arquivo</span>
+    </div>
+    <span class="dica">Para "Meu arquivo de som", use um MP3 ou WAV curto (2 a 4 segundos).</span>
+  </div>
+
+  <div class="blocoCfg">
+    <h3>🗣 Voz do anúncio</h3>
+    <div class="linhaCfg">
+      <label class="check"><input type="checkbox" id="chkVoz" checked> Anunciar por voz</label>
+    </div>
+
+    <div class="linhaCfg">
+      <label class="check"><input type="radio" name="fonteVoz" value="internet" id="fonteNet" checked>
+        Voz da internet <b style="color:var(--verde)">(alta qualidade)</b></label>
+    </div>
+    <div class="linhaCfg" id="linhaVozNet">
+      <select id="selVozNet"></select>
+      <button onclick="testarVoz()">🗣 Testar</button>
+    </div>
+    <div class="linhaCfg">
+      <label class="check"><input type="checkbox" id="chkMulti" onchange="recarregarVozesNet()">
+        Incluir vozes multilíngues de outros países</label>
+    </div>
+    <span class="dica">Vozes neurais, iguais em qualquer computador. As multilíngues falam português
+      com leve sotaque — ouça antes de adotar. Se a internet falhar, o sistema usa a voz do computador.</span>
+
+    <div class="linhaCfg">
+      <label class="check"><input type="radio" name="fonteVoz" value="navegador" id="fonteLocal">
+        Voz do computador</label>
+    </div>
+    <div class="linhaCfg" id="linhaVozLocal">
+      <select id="selVoz"><option value="">Voz automática (pt)</option></select>
+      <button onclick="testarVoz()">🗣 Testar</button>
+    </div>
+    <div class="linhaCfg">
+      <label class="check"><input type="checkbox" id="chkTodasVozes" onchange="montarVozes()"> Mostrar vozes de outros idiomas</label>
+    </div>
+    <span id="infoVozes" class="dica"></span>
+
+    <div class="linhaCfg">
+      <label style="flex:1">Velocidade
+        <input type="range" id="rngVel" min="60" max="130" step="5" value="95">
+      </label>
+      <span id="valVel" class="valZoom">0,95</span>
+    </div>
+    <div class="linhaCfg">
+      <label style="flex:1">Tom da voz
+        <input type="range" id="rngTom" min="50" max="150" step="5" value="100">
+      </label>
+      <span id="valTom" class="valZoom">1,00</span>
+    </div>
+    <span id="statusVoz" class="dica" style="min-height:16px"></span>
+  </div>
+
+  <div class="blocoCfg">
+    <h3>🖼 Slides do projetor</h3>
+    <div class="linhaCfg">
+      <input type="file" id="arqSlides" accept="image/*,application/pdf" multiple>
+    </div>
+    <div class="linhaCfg">
+      <span id="infoSlidesSalvos" class="dica">nenhum slide salvo</span>
+      <button onclick="limparSlides()">🗑 Limpar slides</button>
+    </div>
+    <div class="linhaCfg">
+      <label class="check"><input type="checkbox" id="chkAuto"> Iniciar sozinho ao abrir o painel</label>
+    </div>
+    <div class="linhaCfg">
+      <label>Trocar slide a cada
+        <select id="selIntervalo">
+          <option value="5">5 s</option>
+          <option value="8" selected>8 s</option>
+          <option value="12">12 s</option>
+          <option value="20">20 s</option>
+        </select>
+      </label>
+    </div>
+    <div class="linhaCfg">
+      <label style="flex:1">Zoom
+        <input type="range" id="rngZoom" min="100" max="200" step="5" value="100">
+      </label>
+      <span id="valZoom" class="valZoom">100%</span>
+      <button onclick="zoomPadrao()">Redefinir</button>
+    </div>
+    <span id="statusZoom" class="dica" style="color:var(--verde);min-height:16px"></span>
+    <div id="previaZoom"><span class="dica">Carregue slides para ver a prévia</span></div>
+    <span class="dica">📱 O zoom vale para o projetor e pode ser ajustado daqui ou de outro aparelho
+      (celular, por exemplo) — leva uns 3 segundos para o projetor obedecer.</span>
+    <span class="dica">Acima de 100% a imagem é ampliada a partir do centro e as bordas ficam de fora.</span>
+    <span class="dica">Os slides ficam gravados neste computador — não precisa carregar de novo amanhã.</span>
+  </div>
+
+  <div class="linhaCfg">
+    <button class="btnVoltarPainel" onclick="irPara('painel')">← Voltar ao painel</button>
+    <button class="linkVoltar" onclick="irPara('home')">Início</button>
+  </div>
+</div>
+
+<!-- ===================== ADMIN ===================== -->
+<div id="telaAdmin" class="oculto">
+  <div class="caixaAdmin">
+    <h2>⚙️ Administração</h2>
+    <div class="linhaStat"><span id="rotPri">Prioridade</span><b id="stPri">—</b></div>
+    <div class="linhaStat"><span id="rotCom">Comum</span><b id="stCom">—</b></div>
+    <input type="password" id="pinCampo" class="oculto" placeholder="PIN" inputmode="numeric">
+    <button id="btnReset" onclick="resetar()">Reiniciar ciclo de senhas</button>
+    <div id="msgAdmin"></div>
+  </div>
+
+  <div class="caixaAdmin">
+    <h2>🎫 Faixas de senha</h2>
+    <label class="check cfgSenha"><input type="checkbox" id="chkPri" onchange="alternarPri()"> Usar senhas prioritárias</label>
+    <div class="linhaCfgSenha" id="linhaQtdPri">
+      <label>Quantidade de prioritárias
+        <input type="number" id="numQtdPri" min="1" max="9998" value="20">
+      </label>
+    </div>
+    <div class="linhaCfgSenha">
+      <label>Total de senhas distribuídas
+        <input type="number" id="numTotal" min="1" max="9999" value="150">
+      </label>
+    </div>
+    <div id="resumoFaixas" class="dica"></div>
+    <button id="btnSalvarFaixas" onclick="salvarFaixas()">Salvar faixas</button>
+    <span class="dica">⚠️ Salvar aqui reinicia a contagem: a fila volta ao começo das novas faixas.
+      Faça antes de começar o atendimento do dia.</span>
+    <div id="msgFaixas"></div>
+  </div>
+
+  <div class="caixaAdmin">
+    <h2>📊 Relatório</h2>
+    <div id="resumoRel" class="dica">Carregando…</div>
+    <button id="btnCsv" onclick="baixarCsv()">⬇ Baixar CSV das chamadas</button>
+    <button class="linkVoltar" onclick="limparRelatorio()">apagar registro do relatório</button>
+  </div>
+  <button class="linkVoltar" onclick="irPara('home')">Início</button>
+</div>
+
+<script>
+/* ================================================================
+   NAVEGAÇÃO
+================================================================ */
+const telas = ['home','guiche','atendente','painel','config','admin'];
+let guiche = localStorage.getItem('guiche') || '';
+let pinNecessario = false;
+
+function irPara(t){
+  telas.forEach(x => document.getElementById('tela' + x[0].toUpperCase() + x.slice(1)).classList.add('oculto'));
+  document.getElementById('tela' + t[0].toUpperCase() + t.slice(1)).classList.remove('oculto');
+  location.hash = t === 'home' ? '' : t;
+  if (t === 'atendente') iniciarAtendente();
+  if (t === 'painel') iniciarPainel();
+  // ao ir para configurações o painel continua rodando por trás (não perde as chamadas)
+  else if (t !== 'config') pararPainel();
+  if (t === 'config') abrirConfig();
+  if (t === 'admin') atualizarAdmin();
 }
 
-let cacheVozes = null;   // a lista muda raramente; guarda entre chamadas
+(function montarGuiches(){
+  const g = document.getElementById('gradeGuiches');
+  for (let i = 1; i <= 10; i++){
+    const b = document.createElement('button');
+    b.textContent = i;
+    b.onclick = () => { guiche = String(i); localStorage.setItem('guiche', guiche); irPara('atendente'); };
+    g.appendChild(b);
+  }
+})();
 
-async function listarVozes(incluirMultilingues) {
-  if (!cacheVozes) {
-    try {
-      const tts = new MsEdgeTTS();
-      const todas = await tts.getVoices();
-      cacheVozes = todas
-        .filter(v => {
-          const loc = (v.Locale || '').toLowerCase();
-          // português nativo, ou vozes multilíngues (falam português também)
-          return loc.startsWith('pt') || /MultilingualNeural$/.test(v.ShortName || '');
-        })
-        .map(v => descrever(v.ShortName, v.Gender))
-        .filter(Boolean);
-    } catch (e) {
-      cacheVozes = RESERVA.map(n => descrever(n)).filter(Boolean);
+/* ================================================================
+   API
+================================================================ */
+async function api(metodo, corpo){
+  const ctrl = new AbortController();
+  const timeout = setTimeout(() => ctrl.abort(), 8000);   // não trava esperando rede morta
+  try{
+    const r = await fetch('/api/estado', {
+      method: metodo,
+      headers: { 'Content-Type': 'application/json' },
+      body: corpo ? JSON.stringify(corpo) : undefined,
+      signal: ctrl.signal,
+    });
+    return await r.json();
+  } finally { clearTimeout(timeout); }
+}
+
+/* ---- Plano B: estado guardado no próprio navegador ---- */
+function guardarLocal(chamada){
+  if (!chamada) return;
+  try{
+    const prev = JSON.parse(localStorage.getItem('ultimasChamadas') || '[]');
+    prev.unshift(chamada);
+    localStorage.setItem('ultimasChamadas', JSON.stringify(prev.slice(0, 30)));
+  }catch(e){}
+}
+function lerLocal(){
+  try{ return JSON.parse(localStorage.getItem('ultimasChamadas') || '[]'); }catch(e){ return []; }
+}
+
+let online = true;
+function marcarConexao(ok){
+  if (ok === online) return;
+  online = ok;
+  document.querySelectorAll('.avisoOffline').forEach(el => el.classList.toggle('oculto', ok));
+}
+
+/* ================================================================
+   ATENDENTE
+================================================================ */
+let pollAtend = null;
+
+function iniciarAtendente(){
+  document.getElementById('rotGuiche').textContent = guiche || '?';
+  atualizarAtendente();
+  clearInterval(pollAtend);
+  pollAtend = setInterval(atualizarAtendente, 4000);
+}
+
+let chamadaEmCurso = false;   // trava contra duplo clique
+
+// bloqueia os botões de chamada por alguns instantes
+function travarBotoes(travado){
+  chamadaEmCurso = travado;
+  ['btnPrioridade','btnComum','btnEspecifica'].forEach(id => {
+    const b = document.getElementById(id);
+    if (b) b.disabled = travado;
+  });
+  if (!travado) atualizarAtendente();  // devolve o estado real (faixa esgotada continua desativada)
+}
+
+async function atualizarAtendente(){
+  try{
+    const e = await api('GET');
+    pinNecessario = e.pinNecessario;
+    marcarConexao(true);
+    const restPri = e.limites.maxPrioridade - e.prioridade;
+    const restCom = e.limites.maxComum - e.comum;
+    const temPri = e.config && e.config.prioridadeAtiva;
+
+    // sem fila prioritária: o botão some e o comum vira "próxima senha"
+    document.getElementById('btnPrioridade').classList.toggle('oculto', !temPri);
+    document.getElementById('rotBtnComum').textContent = temPri ? 'Chamar comum' : 'Chamar próxima senha';
+
+    document.getElementById('restPri').textContent =
+      restPri > 0 ? `última: ${e.prioridade || '—'} · restam ${restPri}` : 'esgotadas';
+    document.getElementById('restCom').textContent =
+      restCom > 0
+        ? `última: ${e.comum > e.limites.baseComum ? e.comum : '—'} · restam ${restCom}`
+        : 'esgotadas';
+    if (!chamadaEmCurso){
+      document.getElementById('btnPrioridade').disabled = restPri <= 0;
+      document.getElementById('btnComum').disabled = restCom <= 0;
+    }
+
+    // andamento geral
+    document.getElementById('andPri').textContent = temPri
+      ? `${e.prioridade}/${e.limites.maxPrioridade}` : '—';
+    document.getElementById('andCom').textContent =
+      `${Math.max(e.comum - e.limites.baseComum, 0)}/${e.limites.maxComum - e.limites.baseComum}`;
+    document.getElementById('andTotal').textContent =
+      e.prioridade + Math.max(e.comum - e.limites.baseComum, 0);
+
+    const minha = (e.historico || []).find(c => String(c.guiche) === String(guiche) && !c.intervalo);
+    if (minha){
+      document.getElementById('numAtend').textContent = minha.senha;
+      const tag = document.getElementById('tagAtend');
+      tag.textContent = minha.tipo === 'prioridade' ? 'PRIORIDADE' : 'COMUM';
+      tag.className = 'tag ' + (minha.tipo === 'prioridade' ? 'tagPri' : 'tagCom');
+    }
+  }catch(err){ marcarConexao(false); }
+}
+
+async function chamar(tipo){
+  if (chamadaEmCurso) return;          // ignora o segundo clique
+  travarBotoes(true);
+  const aviso = document.getElementById('avisoAtend');
+  aviso.textContent = '';
+  try{
+    const r = await api('POST', { acao: 'chamar', tipo, guiche });
+    if (r.esgotado){
+      aviso.textContent = tipo === 'prioridade'
+        ? 'Todas as senhas prioritárias (1–20) já foram chamadas.'
+        : 'Todas as senhas comuns (21–150) já foram chamadas.';
+    } else if (r.chamada){
+      guardarLocal(r.chamada);
+    }
+    marcarConexao(true);
+  }catch(err){
+    aviso.textContent = 'Falha de conexão. Verifique se a senha foi chamada antes de repetir.';
+    marcarConexao(false);
+  }
+  setTimeout(() => travarBotoes(false), 2000);   // 2 s de trava
+}
+
+async function chamarEspecifica(){
+  if (chamadaEmCurso) return;
+  const campo = document.getElementById('espNum');
+  const senha = Number(campo.value);
+  const aviso = document.getElementById('avisoAtend');
+  aviso.textContent = '';
+  if (!senha){ aviso.textContent = 'Digite o número da senha.'; return; }
+  travarBotoes(true);
+  try{
+    const r = await api('POST', { acao: 'especifica', senha, guiche });
+    if (r.erro || r.ok === false) aviso.textContent = r.erro || 'Não foi possível chamar.';
+    else { campo.value = ''; guardarLocal(r.chamada); }
+    marcarConexao(true);
+  }catch(err){
+    aviso.textContent = 'Falha de conexão. Tente novamente.';
+    marcarConexao(false);
+  }
+  setTimeout(() => travarBotoes(false), 2000);
+}
+
+async function chamarIntervalo(){
+  const aviso = document.getElementById('avisoAtend');
+  aviso.textContent = '';
+  const de = Number(document.getElementById('intDe').value);
+  const ate = Number(document.getElementById('intAte').value);
+  if (!de || !ate){ aviso.textContent = 'Preencha os dois números do intervalo.'; return; }
+  const msg = document.getElementById('intMsg').value.trim();
+  try{
+    const r = await api('POST', { acao: 'intervalo', de, ate, guiche, msg });
+    if (r.erro || r.ok === false) aviso.textContent = r.erro || 'Intervalo inválido.';
+    else {
+      document.getElementById('intDe').value = '';
+      document.getElementById('intAte').value = '';
+    }
+  }catch(err){ aviso.textContent = 'Falha de conexão. Tente novamente.'; }
+}
+
+async function repetir(){
+  const aviso = document.getElementById('avisoAtend');
+  aviso.textContent = '';
+  try{
+    const r = await api('POST', { acao: 'repetir', guiche });
+    if (r.erro || r.ok === false) aviso.textContent = r.erro || 'Nada para repetir.';
+  }catch(err){ aviso.textContent = 'Falha de conexão. Tente novamente.'; }
+}
+
+/* ================================================================
+   PAINEL — fila de anúncios, voz, som, slides
+================================================================ */
+let pollPainel = null, ultimoId = null, filaAnuncios = [], anunciando = false;
+let slides = [], idxSlide = 0, timerSlides = null, slidesAtivos = false;
+let ctxAudio = null;
+let wakeLock = null;
+let zoomRemoto = 100;   // último zoom recebido do servidor
+
+/* ---- Mantém a tela acesa enquanto o painel está aberto ---- */
+async function pedirWakeLock(){
+  if (!('wakeLock' in navigator)) return;   // navegador sem suporte: segue normal
+  try{
+    wakeLock = await navigator.wakeLock.request('screen');
+  }catch(e){ /* sem permissão/energia crítica: segue normal */ }
+}
+function soltarWakeLock(){
+  if (wakeLock){ wakeLock.release().catch(()=>{}); wakeLock = null; }
+}
+// o navegador solta o wake lock se a aba sair de foco; ao voltar, pedimos de novo
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'visible' && pollPainel) pedirWakeLock();
+});
+
+async function abrirConfig(){
+  // reflete o que já está salvo neste computador
+  const somSalvo = localStorage.getItem('somPainel');
+  if (somSalvo) document.getElementById('selSom').value = somSalvo;
+  const intSalvo = localStorage.getItem('intervaloSlides');
+  if (intSalvo) document.getElementById('selIntervalo').value = intSalvo;
+  document.getElementById('chkAuto').checked = localStorage.getItem('slidesAuto') === '1';
+  document.getElementById('chkVoz').checked = localStorage.getItem('vozAtiva') !== '0';
+
+  // volume, velocidade e tom
+  const vol = Number(localStorage.getItem('volumeSom')) || 100;
+  document.getElementById('rngVol').value = vol;
+  document.getElementById('valVol').textContent = vol + '%';
+  const vel = Number(localStorage.getItem('velVoz')) || 95;
+  document.getElementById('rngVel').value = vel;
+  document.getElementById('valVel').textContent = (vel / 100).toFixed(2).replace('.', ',');
+  const tom = Number(localStorage.getItem('tomVoz')) || 100;
+  document.getElementById('rngTom').value = tom;
+  document.getElementById('valTom').textContent = (tom / 100).toFixed(2).replace('.', ',');
+  mostrarLinhaSomProprio();
+  carregarSomProprio();
+
+  // fonte da voz
+  const usaNet = vozInternetAtiva();
+  document.getElementById('fonteNet').checked = usaNet;
+  document.getElementById('fonteLocal').checked = !usaNet;
+  aplicarFonteVoz();
+
+  // o zoom é compartilhado: busca o valor que está valendo no projetor
+  let z = zoomAtual();
+  try{
+    const e = await api('GET');
+    if (e.config && e.config.zoom){ z = e.config.zoom; zoomRemoto = z; localStorage.setItem('zoomSlides', z); }
+  }catch(err){}
+  document.getElementById('rngZoom').value = z;
+  document.getElementById('valZoom').textContent = z + '%';
+
+  if (!slides.length) carregarSlidesSalvos(true);   // true = só conta, não inicia
+  else atualizarRotuloSlides();
+  desenharPrevia();
+  montarVozes();
+}
+
+function iniciarPainel(){
+  if (pollPainel) return;   // já estava rodando (ex.: voltando das configurações)
+  clearInterval(pollPainel);
+  ultimoId = null; filaAnuncios = []; anunciando = false;
+  cicloPainel();
+  pollPainel = setInterval(cicloPainel, 2500);
+  pedirWakeLock();
+
+  // restaura preferências salvas deste computador
+  document.getElementById('chkAuto').checked = localStorage.getItem('slidesAuto') === '1';
+  const intSalvo = localStorage.getItem('intervaloSlides');
+  if (intSalvo) document.getElementById('selIntervalo').value = intSalvo;
+  const somSalvo = localStorage.getItem('somPainel');
+  if (somSalvo) document.getElementById('selSom').value = somSalvo;
+  document.getElementById('chkVoz').checked = localStorage.getItem('vozAtiva') !== '0';
+  carregarSomProprio();   // o painel precisa do arquivo em memória para tocar
+  if (!slides.length) carregarSlidesSalvos();
+  else if (!slidesAtivos && localStorage.getItem('slidesAuto') === '1') alternarSlides();
+}
+function pararPainel(){
+  clearInterval(pollPainel); pollPainel = null;
+  clearInterval(timerSlides); timerSlides = null; slidesAtivos = false;
+  const b = document.getElementById('btnSlides'); if (b) b.textContent = '▶ Iniciar slides';
+  soltarWakeLock();
+}
+
+async function cicloPainel(){
+  try{
+    const e = await api('GET');
+    const hist = (e.historico || []).slice().sort((a,b) => a.id - b.id); // mais antigo → mais novo
+    if (ultimoId === null){
+      // primeira leitura: não anuncia o passado
+      ultimoId = hist.length ? hist[hist.length - 1].id : 0;
+    } else {
+      for (const c of hist){
+        if (c.id > ultimoId){ filaAnuncios.push(c); ultimoId = c.id; }
+      }
+    }
+    // guarda para continuar exibindo caso a conexão caia
+    try{ localStorage.setItem('histPainel', JSON.stringify(hist.slice(-10))); }catch(e2){}
+
+    // zoom controlado à distância: se mudou no servidor, aplica aqui
+    const zServidor = (e.config && e.config.zoom) || 100;
+    if (zServidor !== zoomRemoto){
+      zoomRemoto = zServidor;
+      localStorage.setItem('zoomSlides', zServidor);   // guarda p/ funcionar offline também
+      aplicarZoom();
+      const rng = document.getElementById('rngZoom');
+      if (rng){ rng.value = zServidor; document.getElementById('valZoom').textContent = zServidor + '%'; }
+    }
+
+    desenharHistorico(hist);
+    processarFila();
+    marcarConexao(true);
+    prepararVozes(e);   // deixa os próximos áudios prontos em segundo plano
+  }catch(err){
+    marcarConexao(false);
+    // sem rede: mantém na tela o último histórico conhecido
+    if (!document.getElementById('faixaItens').innerHTML.trim()){
+      try{
+        const salvo = JSON.parse(localStorage.getItem('histPainel') || '[]');
+        if (salvo.length) desenharHistorico(salvo);
+      }catch(e2){}
     }
   }
-  return incluirMultilingues
-    ? cacheVozes
-    : cacheVozes.filter(v => v.portugues);   // só as nativas em português
 }
 
-// Aceita tanto o apelido ("francisca") quanto o nome técnico completo
-async function resolverVoz(pedida) {
-  const vozes = await listarVozes(true);   // busca em todas, inclusive multilíngues
-  const alvo = String(pedida || 'francisca').toLowerCase();
-  const achada = vozes.find(v => v.id === alvo || v.tecnico.toLowerCase() === alvo);
-  return (achada || vozes.find(v => v.id === 'francisca') || vozes[0]).tecnico;
+function desenharHistorico(histAsc){
+  const vistos = new Set(); const itens = [];
+  for (let i = histAsc.length - 1; i >= 0 && itens.length < 3; i--){
+    const c = histAsc[i];
+    const chave = (c.intervalo ? c.de + '-' + c.ate : c.senha) + '|' + c.guiche;
+    if (!vistos.has(chave)){ vistos.add(chave); itens.push(c); }
+  }
+  // com chamadas: mostra a faixa e reserva o espaço; sem chamadas: slide em tela cheia
+  document.getElementById('telaPainel').classList.toggle('comFaixa', itens.length > 0);
+  document.getElementById('faixaItens').innerHTML = itens.map(c => c.intervalo ? `
+    <div class="itemHist int">
+      <span class="n">${c.de}–${c.ate}</span>
+      <span class="g">atendimento</span>
+    </div>` : `
+    <div class="itemHist ${c.tipo === 'prioridade' ? 'pri' : ''}">
+      <span class="n">${c.senha}</span>
+      <span class="g">Guichê ${c.guiche}</span>
+    </div>`).join('');
 }
 
-export default async function handler(req, res) {
-  res.setHeader('Access-Control-Allow-Origin', '*');
+function processarFila(){
+  if (anunciando || filaAnuncios.length === 0) return;
+  anunciando = true;
+  const c = filaAnuncios.shift();
 
-  // lista as vozes que o serviço realmente oferece agora
-  if (req.method === 'GET' && req.query.listar !== undefined) {
-    const vozes = await listarVozes(req.query.multi !== undefined);
-    res.setHeader('Cache-Control', 'public, max-age=86400');
-    return res.status(200).json({ vozes });
+  const num = document.getElementById('ovNum');
+  const gui = document.getElementById('ovGui');
+  const tag = document.getElementById('ovTag');
+  const rot = document.querySelector('#overlayChamada .rot');
+  let duracao = 7000;
+
+  if (c.intervalo){
+    rot.textContent = 'Senhas';
+    tag.textContent = '';
+    num.textContent = c.de + ' – ' + c.ate;
+    num.style.fontSize = '15vw';                 // intervalo tem mais dígitos
+    gui.textContent = c.msg || 'Dirijam-se à sala de atendimento';
+    gui.style.fontSize = '3.4vw';
+    duracao = 11000;                             // fica mais tempo na tela
+  } else {
+    rot.textContent = 'Senha';
+    const pri = c.tipo === 'prioridade';
+    tag.textContent = pri ? 'PRIORIDADE' : '';
+    tag.style.color = 'var(--ambar)';
+    num.textContent = c.senha;
+    num.style.fontSize = '22vw';
+    gui.textContent = 'Guichê ' + c.guiche;
+    gui.style.fontSize = '5vw';
+  }
+  document.getElementById('overlayChamada').classList.remove('oculto');
+
+  tocarSom();
+  setTimeout(() => falar(c), 700);
+
+  setTimeout(() => {
+    document.getElementById('overlayChamada').classList.add('oculto');
+    anunciando = false;
+    processarFila(); // próxima da fila, se houver — nenhuma chamada é pulada
+  }, duracao);
+}
+
+function vozEscolhida(){
+  const nome = document.getElementById('selVoz').value;
+  const vozes = speechSynthesis.getVoices();
+  if (nome){
+    const v = vozes.find(x => x.name === nome);
+    if (v) return v;
+  }
+  return vozes.find(v => v.lang && v.lang.startsWith('pt')) || null;
+}
+
+function montarVozes(){
+  const sel = document.getElementById('selVoz');
+  const salva = localStorage.getItem('vozPainel') || '';
+  const vozes = speechSynthesis.getVoices();
+  const pt = vozes.filter(v => v.lang && v.lang.toLowerCase().startsWith('pt'));
+  const todas = document.getElementById('chkTodasVozes') && document.getElementById('chkTodasVozes').checked;
+  const lista = todas ? [...pt, ...vozes.filter(v => !pt.includes(v))] : pt;
+
+  const opcao = v => `<option value="${v.name.replace(/"/g,'&quot;')}">${v.name} (${v.lang})</option>`;
+  sel.innerHTML = '<option value="">Voz automática (pt)</option>' +
+    (pt.length ? `<optgroup label="Português (${pt.length})">${pt.map(opcao).join('')}</optgroup>` : '') +
+    (todas && lista.length > pt.length
+      ? `<optgroup label="Outros idiomas">${lista.slice(pt.length).map(opcao).join('')}</optgroup>` : '');
+
+  if (salva && [...sel.querySelectorAll('option')].some(o => o.value === salva)) sel.value = salva;
+  const inf = document.getElementById('infoVozes');
+  if (inf) inf.textContent = pt.length
+    ? `${pt.length} voz(es) em português neste computador`
+    : 'Nenhuma voz em português encontrada — marque "outros idiomas".';
+}
+if ('speechSynthesis' in window){
+  montarVozes();
+  speechSynthesis.onvoiceschanged = montarVozes;  // as vozes carregam com atraso
+  document.getElementById('selVoz').addEventListener('change', ev => {
+    localStorage.setItem('vozPainel', ev.target.value);
+  });
+}
+
+function velocidadeVoz(){
+  const v = Number(localStorage.getItem('velVoz'));
+  return Number.isFinite(v) && v > 0 ? v / 100 : 0.95;
+}
+function tomVoz(){
+  const v = Number(localStorage.getItem('tomVoz'));
+  return Number.isFinite(v) && v > 0 ? v / 100 : 1;
+}
+
+async function testarVoz(){
+  const st = document.getElementById('statusVoz');
+  if (vozInternetAtiva()){
+    const nome = document.getElementById('selVozNet').selectedOptions[0];
+    st.textContent = 'gerando áudio…'; st.style.color = 'var(--suave)';
+    try{
+      await falarPelaInternet('Senha prioritária 42.');
+      st.textContent = `✓ ${nome ? nome.textContent : 'voz'} funcionando`;
+      st.style.color = 'var(--verde)';
+      return;
+    }catch(e){
+      st.textContent = `⚠️ a voz "${nome ? nome.textContent : ''}" não respondeu — escolha outra. ` +
+                       'Por ora será usada a voz do computador.';
+      st.style.color = 'var(--ambar)';
+    }
+  } else st.textContent = '';
+  falarPeloNavegador('Senha prioritária 42.');
+}
+
+/* ================================================================
+   VOZ: internet (alta qualidade) com queda para a do navegador
+================================================================ */
+const vozInternetAtiva = () => localStorage.getItem('fonteVoz') !== 'navegador';
+const vozInternetId    = () => localStorage.getItem('vozInternet') || 'francisca';
+
+// cada frase gerada fica guardada; a mesma senha nunca é baixada duas vezes
+const cacheVoz = new Map();
+
+function urlVoz(texto){
+  const vel = Math.round((velocidadeVoz() - 1) * 100);   // 0,95 → -5%
+  const tom = Math.round((tomVoz() - 1) * 50);           // 1,10 → +5Hz
+  return `/api/voz?texto=${encodeURIComponent(texto)}&voz=${vozInternetId()}` +
+         `&vel=${vel}&tom=${tom}`;
+}
+
+async function falarPelaInternet(texto){
+  const chave = texto + '|' + vozInternetId() + '|' + velocidadeVoz() + '|' + tomVoz();
+  let url = cacheVoz.get(chave);
+  if (!url){
+    const r = await fetch(urlVoz(texto));
+    if (!r.ok) throw new Error('serviço indisponível');
+    const blob = await r.blob();
+    if (!blob.size) throw new Error('áudio vazio');
+    url = URL.createObjectURL(blob);
+    if (cacheVoz.size > 200) cacheVoz.clear();   // evita crescer sem limite
+    cacheVoz.set(chave, url);
+  }
+  const a = new Audio(url);
+  a.volume = volumeSom();
+  await a.play();
+}
+
+function falarPeloNavegador(texto){
+  if (!('speechSynthesis' in window)) return;
+  const u = new SpeechSynthesisUtterance(texto);
+  u.lang = 'pt-BR'; u.rate = velocidadeVoz(); u.pitch = tomVoz();
+  const voz = vozEscolhida();
+  if (voz) u.voice = voz;
+  speechSynthesis.cancel();
+  speechSynthesis.speak(u);
+}
+
+async function dizer(texto){
+  if (vozInternetAtiva()){
+    try{ await falarPelaInternet(texto); return; }
+    catch(e){
+      marcarFonteVoz('reserva');   // avisa que caiu para a voz local
+    }
+  }
+  falarPeloNavegador(texto);
+}
+
+function marcarFonteVoz(estado){
+  const el = document.getElementById('statusVoz');
+  if (!el) return;
+  if (estado === 'reserva'){
+    el.textContent = '⚠️ voz da internet indisponível — usando a voz do computador';
+    el.style.color = 'var(--ambar)';
+  } else if (estado === 'ok'){
+    el.textContent = '✓ usando voz da internet';
+    el.style.color = 'var(--verde)';
+  } else el.textContent = '';
+}
+
+function falar(c){
+  if (!document.getElementById('chkVoz').checked) return;
+  let texto;
+  if (c.intervalo){
+    texto = `Atenção: senhas ${c.de} a ${c.ate}. ${c.msg || 'Dirijam-se à sala de atendimento.'}`;
+  } else {
+    const pri = c.tipo === 'prioridade';
+    // o guichê continua na tela, mas não é falado
+    texto = `Senha ${pri ? 'prioritária ' : ''}${c.senha}.`;
+  }
+  dizer(texto);
+}
+
+/* ---- Sons (WebAudio, sem arquivos externos) ---- */
+function tocarSom(){
+  if (!ctxAudio) ctxAudio = new (window.AudioContext || window.webkitAudioContext)();
+  if (ctxAudio.state === 'suspended') ctxAudio.resume();
+  const tipo = document.getElementById('selSom').value;
+
+  // som próprio enviado pelo usuário
+  if (tipo === 'proprio'){
+    if (somProprio){
+      const a = new Audio(somProprio);
+      a.volume = volumeSom();
+      a.play().catch(()=>{});
+    }
+    return;
   }
 
-  const texto = String(req.query.texto || '').slice(0, 200).trim();
-  const vel = String(req.query.vel || '0');   // ex.: "-10" = 10% mais lento
-  const tom = String(req.query.tom || '0');
+  const t0 = ctxAudio.currentTime;
+  const volGeral = volumeSom();
+  // nota simples; tipoOnda muda o timbre (sine = suave, square/sawtooth = mais presente)
+  const nota = (freq, ini, dur, vol = 0.35, tipoOnda = 'sine') => {
+    const o = ctxAudio.createOscillator(), g = ctxAudio.createGain();
+    o.type = tipoOnda; o.frequency.value = freq;
+    g.gain.setValueAtTime(0, t0 + ini);
+    g.gain.linearRampToValueAtTime(vol * volGeral, t0 + ini + 0.02);
+    g.gain.exponentialRampToValueAtTime(0.001, t0 + ini + dur);
+    o.connect(g); g.connect(ctxAudio.destination);
+    o.start(t0 + ini); o.stop(t0 + ini + dur + 0.05);
+  };
+  // nota que desliza de uma frequência a outra (sirene, sweep)
+  const desliza = (f1, f2, ini, dur, vol = 0.3, tipoOnda = 'sine') => {
+    const o = ctxAudio.createOscillator(), g = ctxAudio.createGain();
+    o.type = tipoOnda;
+    o.frequency.setValueAtTime(f1, t0 + ini);
+    o.frequency.linearRampToValueAtTime(f2, t0 + ini + dur);
+    g.gain.setValueAtTime(0, t0 + ini);
+    g.gain.linearRampToValueAtTime(vol * volGeral, t0 + ini + 0.03);
+    g.gain.exponentialRampToValueAtTime(0.001, t0 + ini + dur);
+    o.connect(g); g.connect(ctxAudio.destination);
+    o.start(t0 + ini); o.stop(t0 + ini + dur + 0.05);
+  };
 
-  if (!texto) return res.status(400).json({ erro: 'Texto não informado' });
+  switch (tipo){
+    case 'dingdong':                                  // campainha clássica
+      nota(830, 0, 0.7); nota(660, 0.45, 0.9); break;
+    case 'sino':                                      // sino puro com harmônico
+      nota(1050, 0, 1.4, 0.4); nota(2100, 0, 0.5, 0.12); break;
+    case 'trinado':                                   // três notas subindo
+      nota(600, 0, 0.25); nota(800, 0.22, 0.25); nota(1000, 0.44, 0.5); break;
+    case 'aeroporto':                                 // dois tons de aviso público
+      nota(880, 0, 0.5, 0.4); nota(1174, 0.35, 0.8, 0.4); break;
+    case 'supermercado':                              // "plim-plom" descendente
+      nota(1046, 0, 0.45, 0.4); nota(784, 0.3, 0.45, 0.4); nota(523, 0.6, 0.9, 0.4); break;
+    case 'gongo':                                     // grave e longo, corta ruído
+      nota(196, 0, 2.2, 0.5); nota(294, 0, 1.6, 0.25); nota(440, 0, 0.9, 0.12); break;
+    case 'xilofone':                                  // quatro notas rápidas e claras
+      nota(1046, 0, 0.3, 0.3, 'triangle'); nota(1318, 0.12, 0.3, 0.3, 'triangle');
+      nota(1568, 0.24, 0.3, 0.3, 'triangle'); nota(2093, 0.36, 0.6, 0.3, 'triangle'); break;
+    case 'bipe':                                      // eletrônico, bem audível
+      nota(1200, 0, 0.12, 0.3, 'square'); nota(1200, 0.2, 0.12, 0.3, 'square');
+      nota(1200, 0.4, 0.2, 0.3, 'square'); break;
+    case 'sirene':                                    // chama muita atenção
+      desliza(600, 1200, 0, 0.4, 0.28, 'triangle');
+      desliza(1200, 600, 0.4, 0.4, 0.28, 'triangle'); break;
+    case 'harpa':                                     // arpejo suave
+      [523, 659, 784, 1046, 1318].forEach((f, i) =>
+        nota(f, i * 0.09, 1.2 - i * 0.1, 0.22, 'triangle')); break;
+    default:
+      nota(830, 0, 0.7); nota(660, 0.45, 0.9);
+  }
+}
 
-  try {
-    const voz = await resolverVoz(req.query.voz);
-    const tts = new MsEdgeTTS();
-    await tts.setMetadata(voz, OUTPUT_FORMAT.AUDIO_24KHZ_48KBITRATE_MONO_MP3);
+function volumeSom(){
+  const v = Number(localStorage.getItem('volumeSom'));
+  return Number.isFinite(v) && v > 0 ? v / 100 : 1;
+}
 
-    const pros = {};
-    if (vel !== '0') pros.rate = `${Number(vel) > 0 ? '+' : ''}${Number(vel)}%`;
-    if (tom !== '0') pros.pitch = `${Number(tom) > 0 ? '+' : ''}${Number(tom)}Hz`;
+/* Baixa antecipadamente os áudios das próximas senhas, para o anúncio sair sem espera */
+async function prepararVozes(estado){
+  if (!vozInternetAtiva() || !estado || !estado.limites) return;
+  const L = estado.limites;
+  const alvos = [];
+  // as próximas cinco de cada fila
+  for (let i = 1; i <= 5; i++){
+    const p = estado.prioridade + i;
+    if (estado.config.prioridadeAtiva && p <= L.maxPrioridade) alvos.push(`Senha prioritária ${p}.`);
+    const c = estado.comum + i;
+    if (c <= L.maxComum) alvos.push(`Senha ${c}.`);
+  }
+  for (const t of alvos){
+    const chave = t + '|' + vozInternetId() + '|' + velocidadeVoz() + '|' + tomVoz();
+    if (cacheVoz.has(chave)) continue;
+    try{
+      const r = await fetch(urlVoz(t));
+      if (!r.ok) return;                    // serviço fora: para de tentar
+      const blob = await r.blob();
+      cacheVoz.set(chave, URL.createObjectURL(blob));
+    }catch(e){ return; }
+  }
+}
 
-    const { audioStream } = await tts.toStream(texto, pros);
-    const partes = [];
-    await new Promise((resolve, reject) => {
-      audioStream.on('data', d => partes.push(d));
-      audioStream.on('end', resolve);
-      audioStream.on('error', reject);
-      setTimeout(() => reject(new Error('tempo esgotado')), 20000);
+/* ---- Escolha da fonte de voz ---- */
+// reserva mínima, usada só se o servidor não responder
+const VOZES_RESERVA = [
+  { id:'francisca', nome:'Francisca', regiao:'Brasil', feminina:true },
+  { id:'antonio',   nome:'Antonio',   regiao:'Brasil', feminina:false },
+];
+
+async function montarVozesInternet(){
+  const sel = document.getElementById('selVozNet');
+  const st = document.getElementById('statusVoz');
+  if (sel.options.length) return;
+
+  const multi = localStorage.getItem('vozMulti') === '1';
+  document.getElementById('chkMulti').checked = multi;
+
+  st.textContent = 'consultando vozes disponíveis…'; st.style.color = 'var(--suave)';
+  let vozes = VOZES_RESERVA, doServico = false;
+  try{
+    const r = await fetch('/api/voz?listar' + (multi ? '&multi' : ''));
+    if (r.ok){
+      const d = await r.json();
+      if (d.vozes && d.vozes.length){ vozes = d.vozes; doServico = true; }
+    }
+  }catch(e){}
+
+  // português primeiro; depois as multilíngues, agrupadas por país
+  const grupo = v => v.portugues === false
+    ? `Multilíngue · ${v.regiao}`
+    : `${v.regiao || 'Brasil'} · ${v.feminina === false ? 'masculinas' : 'femininas'}`;
+  const grupos = [...new Set(vozes.map(grupo))]
+    .sort((a, b) => (a.startsWith('Multilíngue') - b.startsWith('Multilíngue')) || a.localeCompare(b));
+
+  sel.innerHTML = grupos.map(g =>
+    `<optgroup label="${g}">` +
+    vozes.filter(v => grupo(v) === g)
+      .map(v => `<option value="${v.id}">${v.nome}${v.multilingue && v.portugues ? ' (multilíngue)' : ''}</option>`)
+      .join('') + '</optgroup>').join('');
+  sel.value = vozInternetId();
+  if (!sel.value && sel.options.length) sel.selectedIndex = 0;
+
+  if (doServico){
+    const pt = vozes.filter(v => v.portugues !== false).length;
+    st.textContent = multi
+      ? `✓ ${vozes.length} vozes (${pt} em português + ${vozes.length - pt} multilíngues)`
+      : `✓ ${vozes.length} vozes em português disponíveis`;
+    st.style.color = 'var(--verde)';
+  } else {
+    st.innerHTML = '⚠️ não consegui consultar a lista de vozes. Confira se <b>api/voz.js</b> ' +
+                   'e <b>package.json</b> foram publicados.';
+    st.style.color = 'var(--ambar)';
+  }
+}
+
+function recarregarVozesNet(){
+  localStorage.setItem('vozMulti', document.getElementById('chkMulti').checked ? '1' : '0');
+  document.getElementById('selVozNet').innerHTML = '';   // força remontar
+  montarVozesInternet();
+}
+
+function aplicarFonteVoz(){
+  const net = document.getElementById('fonteNet').checked;
+  localStorage.setItem('fonteVoz', net ? 'internet' : 'navegador');
+  document.getElementById('linhaVozNet').style.display = net ? 'flex' : 'none';
+  document.getElementById('linhaVozLocal').style.display = net ? 'none' : 'flex';
+  document.getElementById('chkTodasVozes').closest('.linhaCfg').style.display = net ? 'none' : 'flex';
+  document.getElementById('infoVozes').style.display = net ? 'none' : 'block';
+  marcarFonteVoz('');
+  if (net) montarVozesInternet();
+}
+document.getElementById('fonteNet').addEventListener('change', aplicarFonteVoz);
+document.getElementById('fonteLocal').addEventListener('change', aplicarFonteVoz);
+document.getElementById('selVozNet').addEventListener('change', ev => {
+  localStorage.setItem('vozInternet', ev.target.value);
+  cacheVoz.clear();          // voz nova: recomeça o cache
+  testarVoz();
+});
+
+/* ---- Som personalizado enviado pelo usuário ---- */
+let somProprio = null;
+
+async function salvarSomProprio(dados){
+  try{
+    const db = await abrirBanco();
+    await new Promise((res, rej) => {
+      const tx = db.transaction('cfg', 'readwrite');
+      tx.objectStore('cfg').put(dados, 'somProprio');
+      tx.oncomplete = res; tx.onerror = () => rej(tx.error);
     });
+  }catch(e){}
+}
+async function carregarSomProprio(){
+  try{
+    const db = await abrirBanco();
+    somProprio = await new Promise((res, rej) => {
+      const tx = db.transaction('cfg', 'readonly');
+      const rq = tx.objectStore('cfg').get('somProprio');
+      rq.onsuccess = () => res(rq.result || null);
+      rq.onerror = () => rej(rq.error);
+    });
+  }catch(e){ somProprio = null; }
+  const inf = document.getElementById('infoSom');
+  if (inf) inf.textContent = somProprio ? 'arquivo salvo ✓' : 'nenhum arquivo';
+}
 
-    const audio = Buffer.concat(partes);
-    if (!audio.length) throw new Error('áudio vazio');
+document.getElementById('arqSom').addEventListener('change', async ev => {
+  const f = ev.target.files[0];
+  if (!f) return;
+  if (f.size > 3 * 1024 * 1024){
+    alert('Escolha um arquivo de até 3 MB (som curto, de 2 a 4 segundos).');
+    ev.target.value = ''; return;
+  }
+  document.getElementById('infoSom').textContent = 'carregando…';
+  somProprio = await new Promise(res => {
+    const r = new FileReader(); r.onload = () => res(r.result); r.readAsDataURL(f);
+  });
+  await salvarSomProprio(somProprio);
+  document.getElementById('infoSom').textContent = 'arquivo salvo ✓';
+  document.getElementById('selSom').value = 'proprio';
+  localStorage.setItem('somPainel', 'proprio');
+  tocarSom();                        // toca na hora para conferir
+  ev.target.value = '';
+});
 
-    res.setHeader('Content-Type', 'audio/mpeg');
-    // cache longo: a mesma senha nunca precisa ser gerada duas vezes
-    res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
-    return res.status(200).send(audio);
-  } catch (e) {
-    // o frontend cai automaticamente para a voz do navegador
-    return res.status(503).json({ erro: 'Voz indisponível: ' + (e.message || e) });
+function mostrarLinhaSomProprio(){
+  document.getElementById('linhaSomProprio').style.display =
+    document.getElementById('selSom').value === 'proprio' ? 'flex' : 'none';
+}
+
+/* ---- Volume, velocidade e tom ---- */
+document.getElementById('rngVol').addEventListener('input', ev => {
+  localStorage.setItem('volumeSom', ev.target.value);
+  document.getElementById('valVol').textContent = ev.target.value + '%';
+});
+document.getElementById('rngVol').addEventListener('change', () => tocarSom());
+
+document.getElementById('rngVel').addEventListener('input', ev => {
+  localStorage.setItem('velVoz', ev.target.value);
+  document.getElementById('valVel').textContent = (ev.target.value / 100).toFixed(2).replace('.', ',');
+});
+document.getElementById('rngVel').addEventListener('change', () => testarVoz());
+
+document.getElementById('rngTom').addEventListener('input', ev => {
+  localStorage.setItem('tomVoz', ev.target.value);
+  document.getElementById('valTom').textContent = (ev.target.value / 100).toFixed(2).replace('.', ',');
+});
+document.getElementById('rngTom').addEventListener('change', () => testarVoz());
+
+/* ---- Preferências do painel gravadas neste computador ---- */
+document.getElementById('chkAuto').addEventListener('change', ev => {
+  localStorage.setItem('slidesAuto', ev.target.checked ? '1' : '0');
+});
+document.getElementById('selIntervalo').addEventListener('change', ev => {
+  localStorage.setItem('intervaloSlides', ev.target.value);
+  if (slidesAtivos){ alternarSlides(); alternarSlides(); }  // reinicia com o novo tempo
+});
+document.getElementById('selSom').addEventListener('change', ev => {
+  localStorage.setItem('somPainel', ev.target.value);
+  mostrarLinhaSomProprio();
+  tocarSom();                        // ouve a mudança na hora
+});
+document.getElementById('chkVoz').addEventListener('change', ev => {
+  localStorage.setItem('vozAtiva', ev.target.checked ? '1' : '0');
+});
+const rngZoom = document.getElementById('rngZoom');
+// arrastar: resposta imediata na prévia deste aparelho
+rngZoom.addEventListener('input', ev => {
+  localStorage.setItem('zoomSlides', ev.target.value);
+  document.getElementById('valZoom').textContent = ev.target.value + '%';
+  aplicarZoom();
+});
+// soltar: manda para o servidor e o projetor obedece em poucos segundos
+rngZoom.addEventListener('change', async ev => {
+  const z = Number(ev.target.value);
+  const st = document.getElementById('statusZoom');
+  st.textContent = 'enviando…';
+  try{
+    const r = await api('POST', { acao: 'config', zoom: z });
+    if (r.ok){ zoomRemoto = z; st.textContent = 'aplicado no projetor ✓'; }
+    else st.textContent = r.erro || 'não foi possível aplicar';
+  }catch(err){ st.textContent = 'sem conexão — vale só neste aparelho'; }
+  setTimeout(() => { st.textContent = ''; }, 4000);
+});
+
+/* ---- Barra de controle escondida ---- */
+let timerBarra = null;
+document.getElementById('telaPainel').addEventListener('mousemove', () => {
+  const b = document.getElementById('barraPainel');
+  b.classList.add('visivel');
+  clearTimeout(timerBarra);
+  timerBarra = setTimeout(() => b.classList.remove('visivel'), 3000);
+});
+
+function telaCheia(){
+  const el = document.getElementById('telaPainel');
+  if (!document.fullscreenElement) el.requestFullscreen().catch(()=>{});
+  else document.exitFullscreen();
+}
+
+/* ---- Slides: imagens e PDF ---- */
+/* ---- Armazenamento dos slides (IndexedDB: aguenta arquivos grandes) ---- */
+function abrirBanco(){
+  return new Promise((res, rej) => {
+    const req = indexedDB.open('chamadorSlides', 1);
+    req.onupgradeneeded = () => req.result.createObjectStore('cfg');
+    req.onsuccess = () => res(req.result);
+    req.onerror = () => rej(req.error);
+  });
+}
+async function salvarSlides(lista){
+  try{
+    const db = await abrirBanco();
+    await new Promise((res, rej) => {
+      const tx = db.transaction('cfg', 'readwrite');
+      tx.objectStore('cfg').put(lista, 'slides');
+      tx.oncomplete = res; tx.onerror = () => rej(tx.error);
+    });
+  }catch(e){ /* sem espaço ou modo privado: segue sem persistir */ }
+}
+async function carregarSlidesSalvos(apenasContar){
+  try{
+    const db = await abrirBanco();
+    const lista = await new Promise((res, rej) => {
+      const tx = db.transaction('cfg', 'readonly');
+      const rq = tx.objectStore('cfg').get('slides');
+      rq.onsuccess = () => res(rq.result || []);
+      rq.onerror = () => rej(rq.error);
+    });
+    if (lista.length){
+      slides = lista; idxSlide = 0;
+      atualizarRotuloSlides();
+      if (!apenasContar && localStorage.getItem('slidesAuto') === '1') alternarSlides();
+    } else atualizarRotuloSlides();
+  }catch(e){}
+}
+function atualizarRotuloSlides(){
+  const b = document.getElementById('btnSlides');
+  if (b && !slidesAtivos) b.textContent = slides.length ? `▶ Iniciar slides (${slides.length})` : '▶ Iniciar slides';
+  const inf = document.getElementById('infoSlidesSalvos');
+  if (inf) inf.textContent = slides.length ? `${slides.length} slides salvos` : 'nenhum slide salvo';
+  desenharPrevia();   // mantém a prévia do zoom em dia
+}
+async function limparSlides(){
+  if (!confirm('Remover os slides salvos deste computador?')) return;
+  slides = []; idxSlide = 0;
+  if (slidesAtivos) alternarSlides();
+  await salvarSlides([]);
+  localStorage.removeItem('slidesAuto');
+  document.getElementById('chkAuto').checked = false;
+  atualizarRotuloSlides();
+  document.getElementById('areaSlides').innerHTML = '<div id="marcaOcioso">Aguardando chamadas…</div>';
+}
+
+document.getElementById('arqSlides').addEventListener('change', async ev => {
+  slides = []; idxSlide = 0;
+  for (const f of ev.target.files){
+    if (f.type === 'application/pdf'){
+      try{
+        const buf = await f.arrayBuffer();
+        pdfjsLib.GlobalWorkerOptions.workerSrc =
+          'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+        const pdf = await pdfjsLib.getDocument({ data: buf }).promise;
+        for (let p = 1; p <= pdf.numPages; p++){
+          const pag = await pdf.getPage(p);
+          const vp = pag.getViewport({ scale: 1.6 });
+          const cv = document.createElement('canvas');
+          cv.width = vp.width; cv.height = vp.height;
+          await pag.render({ canvasContext: cv.getContext('2d'), viewport: vp }).promise;
+          slides.push(cv.toDataURL('image/jpeg', 0.85));
+        }
+      }catch(e){ /* PDF inválido: ignora */ }
+    } else if (f.type.startsWith('image/')){
+      slides.push(await new Promise(res => {
+        const r = new FileReader(); r.onload = () => res(r.result); r.readAsDataURL(f);
+      }));
+    }
+  }
+  await salvarSlides(slides);          // ficam gravados para os próximos dias
+  atualizarRotuloSlides();
+  ev.target.value = '';                 // permite recarregar o mesmo arquivo depois
+});
+
+function alternarSlides(){
+  if (slidesAtivos){
+    slidesAtivos = false; clearInterval(timerSlides);
+    document.getElementById('btnSlides').textContent = '▶ Iniciar slides' + (slides.length ? ` (${slides.length})` : '');
+    document.getElementById('areaSlides').innerHTML = '<div id="marcaOcioso">Aguardando chamadas…</div>';
+    return;
+  }
+  if (!slides.length) return;
+  slidesAtivos = true;
+  document.getElementById('btnSlides').textContent = '⏸ Parar slides';
+  mostrarSlide();
+  timerSlides = setInterval(() => { idxSlide = (idxSlide + 1) % slides.length; mostrarSlide(); },
+    Number(document.getElementById('selIntervalo').value) * 1000);
+}
+function zoomAtual(){
+  return Number(localStorage.getItem('zoomSlides')) || 100;
+}
+function aplicarZoom(){
+  const esc = zoomAtual() / 100;
+  const img = document.querySelector('#areaSlides img');
+  if (img) img.style.transform = `scale(${esc})`;
+  const prev = document.querySelector('#previaZoom img');
+  if (prev) prev.style.transform = `scale(${esc})`;
+}
+function desenharPrevia(){
+  const cx = document.getElementById('previaZoom');
+  if (!slides.length){
+    cx.innerHTML = '<span class="dica" style="padding:12px;text-align:center">Sem prévia neste aparelho —<br>' +
+                   'os slides estão no computador do projetor.<br>' +
+                   'Arraste o zoom e olhe direto para a tela projetada.</span>';
+    return;
+  }
+  cx.innerHTML = `<img src="${slides[idxSlide] || slides[0]}" alt="" style="transform:scale(${zoomAtual()/100})">`;
+}
+async function zoomPadrao(){
+  localStorage.setItem('zoomSlides', 100);
+  document.getElementById('rngZoom').value = 100;
+  document.getElementById('valZoom').textContent = '100%';
+  aplicarZoom();
+  try{ await api('POST', { acao: 'config', zoom: 100 }); zoomRemoto = 100; }catch(e){}
+}
+
+function mostrarSlide(){
+  document.getElementById('areaSlides').innerHTML =
+    `<img src="${slides[idxSlide]}" alt="" style="transform:scale(${zoomAtual()/100})">`;
+}
+
+/* ================================================================
+   ADMIN
+================================================================ */
+async function atualizarAdmin(){
+  document.getElementById('msgAdmin').textContent = '';
+  try{
+    const e = await api('GET');
+    pinNecessario = e.pinNecessario;
+    const L = e.limites;
+    const temPri = e.config.prioridadeAtiva;
+
+    // andamento
+    document.getElementById('stPri').textContent = temPri
+      ? `${e.prioridade} de ${L.maxPrioridade} chamadas`
+      : 'desativada';
+    document.getElementById('stCom').textContent =
+      `${Math.max(e.comum - L.baseComum, 0)} de ${L.maxComum - L.baseComum} chamadas`;
+    document.getElementById('rotPri').textContent =
+      temPri ? `Prioridade (1–${L.maxPrioridade})` : 'Prioridade';
+    document.getElementById('rotCom').textContent =
+      `Comum (${L.baseComum + 1}–${L.maxComum})`;
+
+    // formulário de faixas com os valores em vigor
+    document.getElementById('chkPri').checked = temPri;
+    document.getElementById('numQtdPri').value = temPri ? L.maxPrioridade : 20;
+    document.getElementById('numTotal').value = L.maxComum;
+    alternarPri();
+
+    document.getElementById('pinCampo').classList.toggle('oculto', !pinNecessario);
+    carregarRelatorio();
+  }catch(err){
+    document.getElementById('msgAdmin').textContent = 'Falha ao carregar o estado.';
   }
 }
+
+/* ---- Relatório e exportação ---- */
+let logCache = [];
+
+async function carregarRelatorio(){
+  const alvo = document.getElementById('resumoRel');
+  try{
+    const r = await api('POST', { acao: 'relatorio' });
+    logCache = (r.log || []).filter(c => !c.intervalo);
+    if (!logCache.length){ alvo.textContent = 'Nenhuma chamada registrada ainda.'; return; }
+
+    const porGuiche = {};
+    let pri = 0, com = 0;
+    let menor = Infinity, maior = 0;
+    for (const c of logCache){
+      porGuiche[c.guiche] = (porGuiche[c.guiche] || 0) + 1;
+      if (c.tipo === 'prioridade') pri++; else com++;
+      if (c.ts < menor) menor = c.ts;
+      if (c.ts > maior) maior = c.ts;
+    }
+    const horas = (maior - menor) / 3600000;
+    const ritmo = horas > 0.05 ? (logCache.length / horas).toFixed(1) : '—';
+    const guiches = Object.entries(porGuiche)
+      .sort((a,b) => b[1] - a[1])
+      .map(([g,n]) => `guichê ${g}: ${n}`).join(' · ');
+
+    alvo.innerHTML =
+      `<b>${logCache.length}</b> chamadas registradas<br>` +
+      `${pri} prioritárias · ${com} comuns<br>` +
+      `Ritmo médio: ${ritmo} por hora<br>` +
+      `Por atendente: ${guiches}`;
+  }catch(err){ alvo.textContent = 'Não foi possível carregar o relatório.'; }
+}
+
+function baixarCsv(){
+  if (!logCache.length){ alert('Não há chamadas registradas para exportar.'); return; }
+  const linhas = [['data','hora','senha','tipo','guiche','avulsa']];
+  // do mais antigo para o mais recente
+  for (const c of [...logCache].sort((a,b) => a.ts - b.ts)){
+    const d = new Date(c.ts);
+    linhas.push([
+      d.toLocaleDateString('pt-BR'),
+      d.toLocaleTimeString('pt-BR'),
+      c.senha,
+      c.tipo === 'prioridade' ? 'Prioridade' : 'Comum',
+      c.guiche,
+      c.avulsa ? 'sim' : 'nao',
+    ]);
+  }
+  const csv = '\uFEFF' + linhas.map(l => l.join(';')).join('\r\n');  // ; e BOM: abre certo no Excel pt-BR
+  const url = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' }));
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `chamadas-${new Date().toISOString().slice(0,10)}.csv`;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+async function limparRelatorio(){
+  if (!confirm('Apagar TODO o registro de chamadas? O relatório não poderá ser recuperado.')) return;
+  const pin = pinNecessario ? document.getElementById('pinCampo').value : undefined;
+  try{
+    const r = await api('POST', { acao: 'limparLog', pin });
+    if (r.erro) alert(r.erro);
+    else carregarRelatorio();
+  }catch(err){ alert('Falha de conexão.'); }
+}
+
+/* ---- Configuração das faixas de senha ---- */
+function alternarPri(){
+  const ativa = document.getElementById('chkPri').checked;
+  document.getElementById('linhaQtdPri').style.display = ativa ? 'flex' : 'none';
+  previewFaixas();
+}
+function previewFaixas(){
+  const ativa = document.getElementById('chkPri').checked;
+  const qtd = Number(document.getElementById('numQtdPri').value) || 0;
+  const total = Number(document.getElementById('numTotal').value) || 0;
+  const alvo = document.getElementById('resumoFaixas');
+  if (!total){ alvo.textContent = 'Informe o total de senhas.'; return; }
+  if (ativa && (qtd < 1 || qtd >= total)){
+    alvo.innerHTML = '<span style="color:var(--vermelho)">A quantidade de prioritárias precisa ser menor que o total.</span>';
+    return;
+  }
+  alvo.innerHTML = ativa
+    ? `Prioritárias: <b>1 a ${qtd}</b><br>Comuns: <b>${qtd + 1} a ${total}</b>`
+    : `Sem fila prioritária<br>Todas as senhas: <b>1 a ${total}</b>`;
+}
+['numQtdPri','numTotal'].forEach(id =>
+  document.getElementById(id).addEventListener('input', previewFaixas));
+
+async function salvarFaixas(){
+  const ativa = document.getElementById('chkPri').checked;
+  const qtd = Number(document.getElementById('numQtdPri').value);
+  const total = Number(document.getElementById('numTotal').value);
+  const msg = document.getElementById('msgFaixas');
+  msg.style.color = '';
+
+  const aviso = ativa
+    ? `Prioritárias de 1 a ${qtd} e comuns de ${qtd + 1} a ${total}.`
+    : `Sem prioritárias: todas as senhas de 1 a ${total}.`;
+  if (!confirm(`${aviso}\n\nIsso reinicia a contagem das senhas. Confirmar?`)) return;
+
+  try{
+    const pin = pinNecessario ? document.getElementById('pinCampo').value : undefined;
+    const r = await api('POST', {
+      acao: 'configSenhas', prioridadeAtiva: ativa, qtdPrioridade: qtd, totalSenhas: total, pin,
+    });
+    if (r.erro || r.ok === false){
+      msg.style.color = 'var(--vermelho)';
+      msg.textContent = r.erro || 'Não foi possível salvar.';
+    } else {
+      msg.style.color = 'var(--verde)';
+      msg.textContent = 'Faixas salvas e contagem reiniciada.';
+      atualizarAdmin();
+    }
+  }catch(err){
+    msg.style.color = 'var(--vermelho)';
+    msg.textContent = 'Falha de conexão.';
+  }
+}
+
+async function resetar(){
+  if (!confirm('Reiniciar o ciclo? A prioridade volta para a senha 1 e a comum para a 21.')) return;
+  const msg = document.getElementById('msgAdmin');
+  msg.style.color = '';
+  try{
+    const pin = pinNecessario ? document.getElementById('pinCampo').value : undefined;
+    const r = await api('POST', { acao: 'reset', pin });
+    if (r.erro){ msg.style.color = 'var(--vermelho)'; msg.textContent = r.erro; }
+    else { msg.style.color = 'var(--verde)'; msg.textContent = 'Ciclo reiniciado.'; atualizarAdmin(); }
+  }catch(err){ msg.style.color = 'var(--vermelho)'; msg.textContent = 'Falha de conexão.'; }
+}
+
+/* ---- Rota inicial por hash ---- */
+(function(){
+  const h = location.hash.replace('#','');
+  if (h === 'atendente' && !guiche) irPara('guiche');
+  else if (telas.includes(h)) irPara(h);
+})();
+if ('speechSynthesis' in window) speechSynthesis.getVoices();
+</script>
+</body>
+</html>
