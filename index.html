@@ -35,6 +35,10 @@
   #telaGuiche, #telaAtendente{min-height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:22px;padding:24px}
   #telaGuiche h2{font-weight:600}
   .gradeGuiches{display:grid;grid-template-columns:repeat(5,74px);gap:12px}
+  @media (max-width:480px){
+    .gradeGuiches{grid-template-columns:repeat(4,64px);gap:10px}
+    .gradeGuiches button{height:56px;font-size:1.15rem}
+  }
   .gradeGuiches button{height:64px;font-size:1.3rem;font-weight:700;background:var(--panel2);color:var(--texto);border:1px solid var(--borda)}
   .gradeGuiches button:hover{border-color:var(--azul);background:#223350}
   .linkVoltar{background:none;color:var(--suave);text-decoration:underline;font-size:.9rem}
@@ -486,7 +490,7 @@ function irPara(t){
 
 (function montarGuiches(){
   const g = document.getElementById('gradeGuiches');
-  for (let i = 1; i <= 10; i++){
+  for (let i = 1; i <= 20; i++){
     const b = document.createElement('button');
     b.textContent = i;
     b.onclick = () => { guiche = String(i); localStorage.setItem('guiche', guiche); irPara('atendente'); };
