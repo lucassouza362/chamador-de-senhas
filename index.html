@@ -917,7 +917,7 @@ async function testarVoz(){
     const nome = document.getElementById('selVozNet').selectedOptions[0];
     st.textContent = 'gerando áudio…'; st.style.color = 'var(--suave)';
     try{
-      await falarPelaInternet('Senha prioritária 42.');
+      await falarPelaInternet(['Senha prioritária 42.', 'Guichê 3.']);
       st.textContent = `✓ ${nome ? nome.textContent : 'voz'} funcionando`;
       st.style.color = 'var(--verde)';
       return;
@@ -927,7 +927,7 @@ async function testarVoz(){
       st.style.color = 'var(--ambar)';
     }
   } else st.textContent = '';
-  falarPeloNavegador('Senha prioritária 42.');
+  falarPeloNavegador('Senha prioritária 42. Guichê 3.');
 }
 
 /* ================================================================
@@ -946,25 +946,39 @@ function urlVoz(texto){
          `&vel=${vel}&tom=${tom}`;
 }
 
-async function falarPelaInternet(texto){
-  const chave = texto + '|' + vozInternetId() + '|' + velocidadeVoz() + '|' + tomVoz();
-  let url = cacheVoz.get(chave);
-  if (!url){
-    const r = await fetch(urlVoz(texto));
-    if (!r.ok) throw new Error('serviço indisponível');
-    const blob = await r.blob();
-    if (!blob.size) throw new Error('áudio vazio');
-    url = URL.createObjectURL(blob);
-    if (cacheVoz.size > 200) cacheVoz.clear();   // evita crescer sem limite
-    cacheVoz.set(chave, url);
+async function falarPelaInternet(partes){
+  const lista = Array.isArray(partes) ? partes : [partes];
+  // baixa (ou reaproveita) cada trecho antes de tocar, para não haver corte no meio
+  const urls = [];
+  for (const texto of lista){
+    const chave = texto + '|' + vozInternetId() + '|' + velocidadeVoz() + '|' + tomVoz();
+    let url = cacheVoz.get(chave);
+    if (!url){
+      const r = await fetch(urlVoz(texto));
+      if (!r.ok) throw new Error('serviço indisponível');
+      const blob = await r.blob();
+      if (!blob.size) throw new Error('áudio vazio');
+      url = URL.createObjectURL(blob);
+      if (cacheVoz.size > 300) cacheVoz.clear();
+      cacheVoz.set(chave, url);
+    }
+    urls.push(url);
   }
-  const a = new Audio(url);
-  a.volume = volumeSom();
-  await a.play();
+  // toca em sequência: "Senha 42." → "Guichê 3."
+  for (const url of urls){
+    await new Promise((resolve, reject) => {
+      const a = new Audio(url);
+      a.volume = volumeSom();
+      a.onended = resolve;
+      a.onerror = () => reject(new Error('falha ao tocar'));
+      a.play().catch(reject);
+    });
+  }
 }
 
-function falarPeloNavegador(texto){
+function falarPeloNavegador(partes){
   if (!('speechSynthesis' in window)) return;
+  const texto = Array.isArray(partes) ? partes.join(' ') : partes;
   const u = new SpeechSynthesisUtterance(texto);
   u.lang = 'pt-BR'; u.rate = velocidadeVoz(); u.pitch = tomVoz();
   const voz = vozEscolhida();
@@ -973,14 +987,14 @@ function falarPeloNavegador(texto){
   speechSynthesis.speak(u);
 }
 
-async function dizer(texto){
+async function dizer(partes){
   if (vozInternetAtiva()){
-    try{ await falarPelaInternet(texto); return; }
+    try{ await falarPelaInternet(partes); return; }
     catch(e){
       marcarFonteVoz('reserva');   // avisa que caiu para a voz local
     }
   }
-  falarPeloNavegador(texto);
+  falarPeloNavegador(partes);
 }
 
 function marcarFonteVoz(estado){
@@ -997,15 +1011,13 @@ function marcarFonteVoz(estado){
 
 function falar(c){
   if (!document.getElementById('chkVoz').checked) return;
-  let texto;
   if (c.intervalo){
-    texto = `Atenção: senhas ${c.de} a ${c.ate}. ${c.msg || 'Dirijam-se à sala de atendimento.'}`;
-  } else {
-    const pri = c.tipo === 'prioridade';
-    // o guichê continua na tela, mas não é falado
-    texto = `Senha ${pri ? 'prioritária ' : ''}${c.senha}.`;
+    dizer(`Atenção: senhas ${c.de} a ${c.ate}. ${c.msg || 'Dirijam-se à sala de atendimento.'}`);
+    return;
   }
-  dizer(texto);
+  const pri = c.tipo === 'prioridade';
+  // duas partes: cada trecho fica em cache separado e serve para qualquer combinação
+  dizer([`Senha ${pri ? 'prioritária ' : ''}${c.senha}.`, `Guichê ${c.guiche}.`]);
 }
 
 /* ---- Sons (WebAudio, sem arquivos externos) ---- */
@@ -1096,6 +1108,9 @@ async function prepararVozes(estado){
     const c = estado.comum + i;
     if (c <= L.maxComum) alvos.push(`Senha ${c}.`);
   }
+  // os guichês são poucos e servem para qualquer senha: valem o pré-carregamento
+  for (let g = 1; g <= 20; g++) alvos.push(`Guichê ${g}.`);
+
   for (const t of alvos){
     const chave = t + '|' + vozInternetId() + '|' + velocidadeVoz() + '|' + tomVoz();
     if (cacheVoz.has(chave)) continue;
