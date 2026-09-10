@@ -337,6 +337,23 @@
   </div>
 
   <div class="blocoCfg">
+    <h3>🔊 Caixa de som Bluetooth</h3>
+    <div class="linhaCfg">
+      <label class="check"><input type="checkbox" id="chkKeep" checked> Manter a caixa acordada</label>
+    </div>
+    <div class="linhaCfg">
+      <label style="flex:1">Espera antes de falar
+        <input type="range" id="rngBt" min="0" max="1500" step="100" value="400">
+      </label>
+      <span id="valBt" class="valZoom">400ms</span>
+    </div>
+    <button onclick="testarBluetooth()">▶ Testar (som + voz)</button>
+    <span class="dica">Caixas Bluetooth desligam sozinhas quando ficam sem áudio e cortam o começo
+      do anúncio. O sistema envia um sinal contínuo inaudível para evitar isso. Se ainda cortar,
+      aumente a espera até parar.</span>
+  </div>
+
+  <div class="blocoCfg">
     <h3>🗣 Voz do anúncio</h3>
     <div class="linhaCfg">
       <label class="check"><input type="checkbox" id="chkVoz" checked> Anunciar por voz</label>
@@ -715,6 +732,12 @@ async function abrirConfig(){
   mostrarLinhaSomProprio();
   carregarSomProprio();
 
+  // ajustes da caixa Bluetooth
+  document.getElementById('chkKeep').checked = localStorage.getItem('keepAlive') !== '0';
+  const bt = esperaBluetooth();
+  document.getElementById('rngBt').value = bt;
+  document.getElementById('valBt').textContent = bt + 'ms';
+
   // fonte da voz
   const usaNet = vozInternetAtiva();
   document.getElementById('fonteNet').checked = usaNet;
@@ -743,6 +766,7 @@ function iniciarPainel(){
   cicloPainel();
   pollPainel = setInterval(cicloPainel, 2500);
   pedirWakeLock();
+  ligarKeepAlive();   // mantém a caixa Bluetooth acordada durante todo o expediente
 
   // restaura preferências salvas deste computador
   document.getElementById('chkAuto').checked = localStorage.getItem('slidesAuto') === '1';
@@ -760,6 +784,7 @@ function pararPainel(){
   clearInterval(timerSlides); timerSlides = null; slidesAtivos = false;
   const b = document.getElementById('btnSlides'); if (b) b.textContent = '▶ Iniciar slides';
   soltarWakeLock();
+  desligarKeepAlive();
 }
 
 async function cicloPainel(){
@@ -855,7 +880,7 @@ function processarFila(){
   document.getElementById('overlayChamada').classList.remove('oculto');
 
   tocarSom();
-  setTimeout(() => falar(c), 700);
+  setTimeout(() => falar(c), 700 + esperaBluetooth());
 
   setTimeout(() => {
     document.getElementById('overlayChamada').classList.add('oculto');
@@ -931,6 +956,38 @@ async function testarVoz(){
 }
 
 /* ================================================================
+   Caixa Bluetooth: mantém o canal de áudio aberto
+   Sem isso, a caixa "dorme" e engole o início do anúncio.
+================================================================ */
+let manterAcordado = null;
+
+function ligarKeepAlive(){
+  if (localStorage.getItem('keepAlive') === '0') return;
+  if (!ctxAudio) ctxAudio = new (window.AudioContext || window.webkitAudioContext)();
+  if (ctxAudio.state === 'suspended') ctxAudio.resume();
+  if (manterAcordado) return;
+  // tom grave em volume praticamente nulo: a caixa entende que há sinal e não desliga
+  const o = ctxAudio.createOscillator(), g = ctxAudio.createGain();
+  o.type = 'sine'; o.frequency.value = 200;
+  g.gain.value = 0.0015;                    // inaudível na prática
+  o.connect(g); g.connect(ctxAudio.destination);
+  o.start();
+  manterAcordado = { o, g };
+}
+function desligarKeepAlive(){
+  if (!manterAcordado) return;
+  try{ manterAcordado.o.stop(); }catch(e){}
+  manterAcordado = null;
+}
+
+// pequeno silêncio antes de qualquer áudio, para dar tempo de a caixa engatar
+function esperaBluetooth(){
+  const ms = Number(localStorage.getItem('atrasoBt'));
+  return Number.isFinite(ms) ? ms : 400;
+}
+function pausa(ms){ return new Promise(r => setTimeout(r, ms)); }
+
+/* ================================================================
    VOZ: internet (alta qualidade) com queda para a do navegador
 ================================================================ */
 const vozInternetAtiva = () => localStorage.getItem('fonteVoz') !== 'navegador';
@@ -965,9 +1022,11 @@ async function falarPelaInternet(partes){
     urls.push(url);
   }
   // toca em sequência: "Senha 42." → "Guichê 3."
-  for (const url of urls){
+  ligarKeepAlive();                 // garante o canal aberto
+  for (let i = 0; i < urls.length; i++){
+    if (i === 0) await pausa(esperaBluetooth());   // deixa a caixa engatar antes da 1ª palavra
     await new Promise((resolve, reject) => {
-      const a = new Audio(url);
+      const a = new Audio(urls[i]);
       a.volume = volumeSom();
       a.onended = resolve;
       a.onerror = () => reject(new Error('falha ao tocar'));
@@ -979,12 +1038,15 @@ async function falarPelaInternet(partes){
 function falarPeloNavegador(partes){
   if (!('speechSynthesis' in window)) return;
   const texto = Array.isArray(partes) ? partes.join(' ') : partes;
-  const u = new SpeechSynthesisUtterance(texto);
-  u.lang = 'pt-BR'; u.rate = velocidadeVoz(); u.pitch = tomVoz();
-  const voz = vozEscolhida();
-  if (voz) u.voice = voz;
-  speechSynthesis.cancel();
-  speechSynthesis.speak(u);
+  ligarKeepAlive();
+  setTimeout(() => {
+    const u = new SpeechSynthesisUtterance(texto);
+    u.lang = 'pt-BR'; u.rate = velocidadeVoz(); u.pitch = tomVoz();
+    const voz = vozEscolhida();
+    if (voz) u.voice = voz;
+    speechSynthesis.cancel();
+    speechSynthesis.speak(u);
+  }, esperaBluetooth());
 }
 
 async function dizer(partes){
@@ -1024,19 +1086,23 @@ function falar(c){
 function tocarSom(){
   if (!ctxAudio) ctxAudio = new (window.AudioContext || window.webkitAudioContext)();
   if (ctxAudio.state === 'suspended') ctxAudio.resume();
+  ligarKeepAlive();
   const tipo = document.getElementById('selSom').value;
+  const espera = esperaBluetooth() / 1000;   // atraso em segundos para a caixa engatar
 
   // som próprio enviado pelo usuário
   if (tipo === 'proprio'){
     if (somProprio){
-      const a = new Audio(somProprio);
-      a.volume = volumeSom();
-      a.play().catch(()=>{});
+      setTimeout(() => {
+        const a = new Audio(somProprio);
+        a.volume = volumeSom();
+        a.play().catch(()=>{});
+      }, esperaBluetooth());
     }
     return;
   }
 
-  const t0 = ctxAudio.currentTime;
+  const t0 = ctxAudio.currentTime + espera;
   const volGeral = volumeSom();
   // nota simples; tipoOnda muda o timbre (sine = suave, square/sawtooth = mais presente)
   const nota = (freq, ini, dur, vol = 0.35, tipoOnda = 'sine') => {
@@ -1249,6 +1315,22 @@ document.getElementById('arqSom').addEventListener('change', async ev => {
 function mostrarLinhaSomProprio(){
   document.getElementById('linhaSomProprio').style.display =
     document.getElementById('selSom').value === 'proprio' ? 'flex' : 'none';
+}
+
+/* ---- Ajustes para caixa Bluetooth ---- */
+document.getElementById('chkKeep').addEventListener('change', ev => {
+  localStorage.setItem('keepAlive', ev.target.checked ? '1' : '0');
+  if (ev.target.checked) ligarKeepAlive(); else desligarKeepAlive();
+});
+document.getElementById('rngBt').addEventListener('input', ev => {
+  localStorage.setItem('atrasoBt', ev.target.value);
+  document.getElementById('valBt').textContent = ev.target.value + 'ms';
+});
+
+// reproduz exatamente o que acontece numa chamada real
+function testarBluetooth(){
+  tocarSom();
+  setTimeout(() => dizer(['Senha prioritária 42.', 'Guichê 3.']), 700 + esperaBluetooth());
 }
 
 /* ---- Volume, velocidade e tom ---- */
