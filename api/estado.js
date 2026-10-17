@@ -131,11 +131,26 @@ export default async function handler(req, res) {
         }
         const guiche = String(body.guiche || '?').slice(0, 20);
         const tipo = (L.prioridadeAtiva && senha <= L.maxPrioridade) ? 'prioridade' : 'comum';
+        const mover = Boolean(body.mover);   // true = a fila passa a seguir desta senha
+
+        if (mover) {
+          // reposiciona o contador: a próxima chamada da faixa será senha + 1
+          if (tipo === 'prioridade') {
+            await redis.set(K.prioridade, senha);
+          } else {
+            await redis.set(K.comum, senha);
+          }
+        }
+
         const id = await redis.incr(K.seq);
-        const chamada = { id, senha, tipo, guiche, ts: Date.now(), avulsa: true };
+        const chamada = { id, senha, tipo, guiche, ts: Date.now(), avulsa: !mover };
         await registrar(redis, chamada);
-        // não mexe nos contadores: a fila normal segue de onde estava
-        return res.status(200).json({ ok: true, chamada });
+        return res.status(200).json({
+          ok: true,
+          chamada,
+          // informa qual será a próxima, para a interface confirmar ao atendente
+          proxima: mover ? (senha < (tipo === 'prioridade' ? L.maxPrioridade : L.maxComum) ? senha + 1 : null) : null,
+        });
       }
 
       // ---- Chamar um intervalo de senhas (lote para a sala de atendimento) ----
