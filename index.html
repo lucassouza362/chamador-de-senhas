@@ -41,6 +41,8 @@
   }
   .gradeGuiches button{height:64px;font-size:1.3rem;font-weight:700;background:var(--panel2);color:var(--texto);border:1px solid var(--borda)}
   .gradeGuiches button:hover{border-color:var(--azul);background:#223350}
+  #btnSemGuiche{grid-column:span 5;font-size:1rem;letter-spacing:.03em}
+  @media (max-width:480px){ #btnSemGuiche{grid-column:span 4} }
   .linkVoltar{background:none;color:var(--suave);text-decoration:underline;font-size:.9rem}
 
   #telaAtendente{gap:16px}
@@ -208,7 +210,7 @@
 
 <!-- ===================== ATENDENTE ===================== -->
 <div id="telaAtendente" class="oculto">
-  <div id="cabAtend">Guichê <b id="rotGuiche">1</b>
+  <div id="cabAtend"><span id="rotuloGuiche">Guichê</span> <b id="rotGuiche">1</b>
     <button class="linkVoltar" onclick="irPara('guiche')">trocar</button>
   </div>
   <div class="avisoOffline oculto">⚠️ Sem conexão — as chamadas não estão sendo registradas</div>
@@ -241,10 +243,14 @@
   <div id="caixaEspecifica">
     <h3>Chamar uma senha específica</h3>
     <div class="linhaEspec">
-      <input type="number" id="espNum" min="1" max="150" placeholder="nº">
+      <input type="number" id="espNum" min="1" max="150" placeholder="nº" oninput="dicaEspecifica()">
       <button id="btnEspecifica" onclick="chamarEspecifica()">Chamar</button>
     </div>
-    <span class="dica">Para quem não estava na sala. Não altera a ordem da fila.</span>
+    <label class="check linhaEspec" style="justify-content:flex-start;gap:8px;font-size:.85rem">
+      <input type="checkbox" id="chkMover" checked onchange="dicaEspecifica()">
+      <span>Seguir a fila a partir desta senha</span>
+    </label>
+    <span class="dica" id="dicaEspec"></span>
   </div>
 
   <div id="caixaIntervalo">
@@ -505,14 +511,28 @@ function irPara(t){
   if (t === 'admin') atualizarAdmin();
 }
 
+// valor reservado para atendimento que não é feito em guichê numerado
+const SEM_GUICHE = 'sem';
+const temGuiche = g => g && String(g) !== SEM_GUICHE;
+
 (function montarGuiches(){
   const g = document.getElementById('gradeGuiches');
+  const escolher = valor => {
+    guiche = String(valor);
+    localStorage.setItem('guiche', guiche);
+    irPara('atendente');
+  };
   for (let i = 1; i <= 20; i++){
     const b = document.createElement('button');
     b.textContent = i;
-    b.onclick = () => { guiche = String(i); localStorage.setItem('guiche', guiche); irPara('atendente'); };
+    b.onclick = () => escolher(i);
     g.appendChild(b);
   }
+  const b = document.createElement('button');
+  b.textContent = 'Sem guichê';
+  b.id = 'btnSemGuiche';
+  b.onclick = () => escolher(SEM_GUICHE);
+  g.appendChild(b);
 })();
 
 /* ================================================================
@@ -558,7 +578,10 @@ function marcarConexao(ok){
 let pollAtend = null;
 
 function iniciarAtendente(){
-  document.getElementById('rotGuiche').textContent = guiche || '?';
+  const comGuiche = temGuiche(guiche);
+  document.getElementById('rotuloGuiche').textContent = comGuiche ? 'Guichê' : 'Atendimento';
+  document.getElementById('rotGuiche').textContent = comGuiche ? guiche : 'sem guichê';
+  dicaEspecifica();
   atualizarAtendente();
   clearInterval(pollAtend);
   pollAtend = setInterval(atualizarAtendente, 4000);
@@ -647,17 +670,42 @@ async function chamarEspecifica(){
   const aviso = document.getElementById('avisoAtend');
   aviso.textContent = '';
   if (!senha){ aviso.textContent = 'Digite o número da senha.'; return; }
+  const mover = document.getElementById('chkMover').checked;
   travarBotoes(true);
   try{
-    const r = await api('POST', { acao: 'especifica', senha, guiche });
+    const r = await api('POST', { acao: 'especifica', senha, guiche, mover });
     if (r.erro || r.ok === false) aviso.textContent = r.erro || 'Não foi possível chamar.';
-    else { campo.value = ''; guardarLocal(r.chamada); }
+    else {
+      campo.value = '';
+      guardarLocal(r.chamada);
+      if (mover){
+        // confirma o reposicionamento para o atendente não ficar na dúvida
+        aviso.style.color = 'var(--verde)';
+        aviso.textContent = r.proxima
+          ? `Fila reposicionada: a próxima será a ${r.proxima}.`
+          : 'Fila reposicionada: esta era a última da faixa.';
+        setTimeout(() => { aviso.textContent = ''; aviso.style.color = ''; }, 6000);
+      }
+      atualizarAtendente();
+      dicaEspecifica();
+    }
     marcarConexao(true);
   }catch(err){
     aviso.textContent = 'Falha de conexão. Tente novamente.';
     marcarConexao(false);
   }
   setTimeout(() => travarBotoes(false), 2000);
+}
+
+// explica o que o botão vai fazer, conforme a opção marcada
+function dicaEspecifica(){
+  const mover = document.getElementById('chkMover').checked;
+  const el = document.getElementById('dicaEspec');
+  const n = Number(document.getElementById('espNum').value);
+  el.textContent = mover
+    ? (n ? `Chama a ${n} e a fila segue dela: a próxima será a ${n + 1}.`
+         : 'A fila passa a seguir a partir da senha chamada.')
+    : 'Só rechama a senha. A ordem da fila não muda.';
 }
 
 async function chamarIntervalo(){
@@ -844,7 +892,7 @@ function desenharHistorico(histAsc){
     </div>` : `
     <div class="itemHist ${c.tipo === 'prioridade' ? 'pri' : ''}">
       <span class="n">${c.senha}</span>
-      <span class="g">Guichê ${c.guiche}</span>
+      ${temGuiche(c.guiche) ? `<span class="g">Guichê ${c.guiche}</span>` : ''}
     </div>`).join('');
 }
 
@@ -873,8 +921,9 @@ function processarFila(){
     tag.textContent = pri ? 'PRIORIDADE' : '';
     tag.style.color = 'var(--ambar)';
     num.textContent = c.senha;
-    num.style.fontSize = '22vw';
-    gui.textContent = 'Guichê ' + c.guiche;
+    // sem guichê: o número ocupa mais espaço, já que não há linha abaixo
+    num.style.fontSize = temGuiche(c.guiche) ? '22vw' : '26vw';
+    gui.textContent = temGuiche(c.guiche) ? 'Guichê ' + c.guiche : '';
     gui.style.fontSize = '5vw';
   }
   document.getElementById('overlayChamada').classList.remove('oculto');
@@ -1079,7 +1128,9 @@ function falar(c){
   }
   const pri = c.tipo === 'prioridade';
   // duas partes: cada trecho fica em cache separado e serve para qualquer combinação
-  dizer([`Senha ${pri ? 'prioritária ' : ''}${c.senha}.`, `Guichê ${c.guiche}.`]);
+  const partes = [`Senha ${pri ? 'prioritária ' : ''}${c.senha}.`];
+  if (temGuiche(c.guiche)) partes.push(`Guichê ${c.guiche}.`);   // sem guichê: fala só o número
+  dizer(partes);
 }
 
 /* ---- Sons (WebAudio, sem arquivos externos) ---- */
@@ -1591,7 +1642,7 @@ async function carregarRelatorio(){
     const ritmo = horas > 0.05 ? (logCache.length / horas).toFixed(1) : '—';
     const guiches = Object.entries(porGuiche)
       .sort((a,b) => b[1] - a[1])
-      .map(([g,n]) => `guichê ${g}: ${n}`).join(' · ');
+      .map(([g,n]) => `${temGuiche(g) ? 'guichê ' + g : 'sem guichê'}: ${n}`).join(' · ');
 
     alvo.innerHTML =
       `<b>${logCache.length}</b> chamadas registradas<br>` +
@@ -1612,7 +1663,7 @@ function baixarCsv(){
       d.toLocaleTimeString('pt-BR'),
       c.senha,
       c.tipo === 'prioridade' ? 'Prioridade' : 'Comum',
-      c.guiche,
+      temGuiche(c.guiche) ? c.guiche : '',
       c.avulsa ? 'sim' : 'nao',
     ]);
   }
