@@ -2,6 +2,14 @@ import { MsEdgeTTS, OUTPUT_FORMAT } from 'msedge-tts';
 
 export const config = { maxDuration: 25 };
 
+// Versão da biblioteca de voz, útil no diagnóstico: o endereço do serviço da
+// Microsoft mudou na 2.1.0, e versões anteriores falham com "Unexpected server response".
+let versaoLib = 'desconhecida';
+try {
+  const { createRequire } = await import('module');
+  versaoLib = createRequire(import.meta.url)('msedge-tts/package.json').version;
+} catch (e) { /* segue sem a versão */ }
+
 // Lista de reserva, usada só se a consulta ao serviço falhar
 const RESERVA = [
   'pt-BR-FranciscaNeural', 'pt-BR-AntonioNeural',
@@ -39,7 +47,7 @@ async function listarVozes(incluirMultilingues, forcar) {
   let fonte = 'cache';
   if (!cacheVozes) {
     try {
-      const tts = new MsEdgeTTS();
+      const tts = new MsEdgeTTS({ connectionTimeoutMs: 8000, synthesisTimeoutMs: 20000 });
       const todas = await tts.getVoices();
       const lista = todas
         .filter(v => {
@@ -94,7 +102,7 @@ export default async function handler(req, res) {
     const r = await listarVozes(req.query.multi !== undefined, req.query.recarregar !== undefined);
     // só guarda em cache no navegador quando veio mesmo do serviço
     res.setHeader('Cache-Control', r.fonte === 'reserva' ? 'no-store' : 'public, max-age=3600');
-    return res.status(200).json({ vozes: r.vozes, fonte: r.fonte, erro: r.erro });
+    return res.status(200).json({ vozes: r.vozes, fonte: r.fonte, erro: r.erro, versao: versaoLib });
   }
 
   const texto = String(req.query.texto || '').slice(0, 200).trim();
@@ -105,7 +113,7 @@ export default async function handler(req, res) {
 
   try {
     const voz = await resolverVoz(req.query.voz);
-    const tts = new MsEdgeTTS();
+    const tts = new MsEdgeTTS({ connectionTimeoutMs: 8000, synthesisTimeoutMs: 20000 });
     await tts.setMetadata(voz, OUTPUT_FORMAT.AUDIO_24KHZ_48KBITRATE_MONO_MP3);
 
     const pros = {};
