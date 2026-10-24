@@ -1155,7 +1155,7 @@ function agendarReconexao(){
 }
 
 /* Estado da voz, compartilhado entre o painel e as configurações */
-const estadoVoz = { fonte: null, erro: null, desde: null, falhas: 0 };
+const estadoVoz = { fonte: null, erro: null, desde: null, falhas: 0, versao: null };
 
 function marcarFonteVoz(estado, detalhe){
   if (estado === 'reserva' && estadoVoz.fonte !== 'reserva'){
@@ -1178,7 +1178,8 @@ function pintarStatusVoz(){
         : '';
       el.innerHTML = `⚠️ <b>Voz da internet fora do ar</b>${h ? ` desde ${h}` : ''} — ` +
         'o anúncio está saindo com a voz do computador, que ignora a escolha acima.' +
-        (estadoVoz.erro ? `<br><span style="opacity:.75">Motivo: ${estadoVoz.erro}</span>` : '');
+        (estadoVoz.erro ? `<br><span style="opacity:.75">Motivo: ${estadoVoz.erro}</span>` : '') +
+        (estadoVoz.versao ? `<br><span style="opacity:.6">serviço de voz v${estadoVoz.versao}</span>` : '');
       el.style.color = 'var(--ambar)';
     } else if (estadoVoz.fonte === 'ok'){
       el.textContent = '✓ voz da internet funcionando';
@@ -1365,6 +1366,7 @@ async function montarVozesInternet(forcar){
         vozes = d.vozes;
         doServico = d.fonte !== 'reserva';      // reserva = o serviço não respondeu
         motivo = d.erro || null;
+        estadoVoz.versao = d.versao || null;
       }
     } else motivo = 'HTTP ' + r.status;
   }catch(e){ motivo = String(e.message || e); }
@@ -1387,9 +1389,10 @@ async function montarVozesInternet(forcar){
   if (doServico){
     const pt = vozes.filter(v => v.portugues !== false).length;
     if (st){
-      st.textContent = multi
+      st.innerHTML = (multi
         ? `✓ ${vozes.length} vozes (${pt} em português + ${vozes.length - pt} multilíngues)`
-        : `✓ ${vozes.length} vozes em português disponíveis`;
+        : `✓ ${vozes.length} vozes em português disponíveis`)
+        + (estadoVoz.versao ? `<br><span style="opacity:.6">serviço de voz v${estadoVoz.versao}</span>` : '');
       st.style.color = 'var(--verde)';
     }
   } else {
