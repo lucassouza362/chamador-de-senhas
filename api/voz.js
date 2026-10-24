@@ -29,14 +29,19 @@ function descrever(nomeTecnico, genero) {
   };
 }
 
-let cacheVozes = null;   // a lista muda raramente; guarda entre chamadas
+let cacheVozes = null;      // a lista muda raramente; guarda entre chamadas
+let ultimoErro = null;      // motivo da última falha, para o diagnóstico
 
-async function listarVozes(incluirMultilingues) {
+// Nunca guarda a lista de reserva em cache: uma falha passageira não pode
+// deixar o serviço preso às poucas vozes de emergência.
+async function listarVozes(incluirMultilingues, forcar) {
+  if (forcar) cacheVozes = null;
+  let fonte = 'cache';
   if (!cacheVozes) {
     try {
       const tts = new MsEdgeTTS();
       const todas = await tts.getVoices();
-      cacheVozes = todas
+      const lista = todas
         .filter(v => {
           const loc = (v.Locale || '').toLowerCase();
           // português nativo, ou vozes multilíngues (falam português também)
@@ -44,20 +49,39 @@ async function listarVozes(incluirMultilingues) {
         })
         .map(v => descrever(v.ShortName, v.Gender))
         .filter(Boolean);
+      if (!lista.length) throw new Error('o serviço não devolveu vozes em português');
+      cacheVozes = lista;
+      ultimoErro = null;
+      fonte = 'servico';
     } catch (e) {
-      cacheVozes = RESERVA.map(n => descrever(n)).filter(Boolean);
+      ultimoErro = String((e && e.message) || e);
+      // devolve a reserva SEM gravar no cache: a próxima chamada tenta de novo
+      const reserva = RESERVA.map(n => descrever(n)).filter(Boolean);
+      return {
+        fonte: 'reserva',
+        erro: ultimoErro,
+        vozes: incluirMultilingues ? reserva : reserva.filter(v => v.portugues),
+      };
     }
   }
-  return incluirMultilingues
-    ? cacheVozes
-    : cacheVozes.filter(v => v.portugues);   // só as nativas em português
+  return {
+    fonte,
+    erro: null,
+    vozes: incluirMultilingues ? cacheVozes : cacheVozes.filter(v => v.portugues),
+  };
 }
 
 // Aceita tanto o apelido ("francisca") quanto o nome técnico completo
 async function resolverVoz(pedida) {
-  const vozes = await listarVozes(true);   // busca em todas, inclusive multilíngues
-  const alvo = String(pedida || 'francisca').toLowerCase();
+  const { vozes } = await listarVozes(true);   // busca em todas, inclusive multilíngues
+  const alvo = String(pedida || '').toLowerCase().trim();
   const achada = vozes.find(v => v.id === alvo || v.tecnico.toLowerCase() === alvo);
+  if (!achada && alvo) {
+    // a voz pedida não existe na lista: avisa em vez de trocar em silêncio
+    const e = new Error(`a voz "${alvo}" não está disponível no serviço`);
+    e.vozInvalida = true;
+    throw e;
+  }
   return (achada || vozes.find(v => v.id === 'francisca') || vozes[0]).tecnico;
 }
 
@@ -65,10 +89,12 @@ export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
 
   // lista as vozes que o serviço realmente oferece agora
+  // ?recarregar força nova consulta, ignorando o cache
   if (req.method === 'GET' && req.query.listar !== undefined) {
-    const vozes = await listarVozes(req.query.multi !== undefined);
-    res.setHeader('Cache-Control', 'public, max-age=86400');
-    return res.status(200).json({ vozes });
+    const r = await listarVozes(req.query.multi !== undefined, req.query.recarregar !== undefined);
+    // só guarda em cache no navegador quando veio mesmo do serviço
+    res.setHeader('Cache-Control', r.fonte === 'reserva' ? 'no-store' : 'public, max-age=3600');
+    return res.status(200).json({ vozes: r.vozes, fonte: r.fonte, erro: r.erro });
   }
 
   const texto = String(req.query.texto || '').slice(0, 200).trim();
@@ -101,9 +127,14 @@ export default async function handler(req, res) {
     res.setHeader('Content-Type', 'audio/mpeg');
     // cache longo: a mesma senha nunca precisa ser gerada duas vezes
     res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
+    res.setHeader('X-Voz-Usada', voz);   // permite conferir qual voz gerou o áudio
     return res.status(200).send(audio);
   } catch (e) {
     // o frontend cai automaticamente para a voz do navegador
-    return res.status(503).json({ erro: 'Voz indisponível: ' + (e.message || e) });
+    res.setHeader('Cache-Control', 'no-store');
+    return res.status(503).json({
+      erro: 'Voz indisponível: ' + (e.message || e),
+      vozInvalida: Boolean(e.vozInvalida),
+    });
   }
 }
