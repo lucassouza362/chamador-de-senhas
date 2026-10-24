@@ -118,6 +118,9 @@
   #overlayChamada .gui{font-size:5vw;font-weight:700;color:var(--texto);margin-top:1vw}
   @keyframes pulsa{from{transform:scale(1)}to{transform:scale(1.05)}}
 
+  #avisoVozPainel{position:absolute;top:10px;left:14px;z-index:9;cursor:pointer;
+    background:#3a2410;border:1px solid var(--ambar);color:var(--ambar);
+    border-radius:8px;padding:6px 12px;font-size:.8rem;font-weight:600}
   #barraPainel{position:absolute;top:0;left:0;right:0;z-index:10;background:rgba(13,20,32,.95);
     border-bottom:1px solid var(--borda);display:flex;gap:10px;align-items:center;padding:10px 14px;flex-wrap:wrap;
     transform:translateY(-110%);transition:transform .25s}
@@ -284,6 +287,10 @@
     <div class="gui" id="ovGui"></div>
   </div>
 
+  <div id="avisoVozPainel" class="oculto" onclick="irPara('config')">
+    ⚠️ voz da internet fora do ar
+  </div>
+
   <div id="barraPainel">
     <button onclick="telaCheia()">⛶ Tela cheia</button>
     <button id="btnSlides" onclick="alternarSlides()">▶ Iniciar slides</button>
@@ -406,6 +413,12 @@
       <span id="valTom" class="valZoom">1,00</span>
     </div>
     <span id="statusVoz" class="dica" style="min-height:16px"></span>
+    <div class="linhaCfg">
+      <button id="btnReconectar" onclick="reconectarVoz()">🔄 Reconectar voz</button>
+      <label class="check"><input type="checkbox" id="chkAutoRecon" checked> Tentar reconectar sozinho</label>
+    </div>
+    <span class="dica">Use o botão se o anúncio voltar a sair com a voz do computador. Com a opção
+      automática ligada, o sistema tenta sozinho a cada minuto enquanto estiver fora do ar.</span>
   </div>
 
   <div class="blocoCfg">
@@ -513,7 +526,9 @@ function irPara(t){
 
 // valor reservado para atendimento que não é feito em guichê numerado
 const SEM_GUICHE = 'sem';
-const temGuiche = g => g && String(g) !== SEM_GUICHE;
+// só um número conta como guichê: 'sem', '', '?', '-' e afins viram "sem guichê"
+const numGuiche = g => String(g ?? '').trim();
+const temGuiche = g => /^\d+$/.test(numGuiche(g));
 
 (function montarGuiches(){
   const g = document.getElementById('gradeGuiches');
@@ -790,7 +805,9 @@ async function abrirConfig(){
   const usaNet = vozInternetAtiva();
   document.getElementById('fonteNet').checked = usaNet;
   document.getElementById('fonteLocal').checked = !usaNet;
+  document.getElementById('chkAutoRecon').checked = localStorage.getItem('autoReconVoz') !== '0';
   aplicarFonteVoz();
+  pintarStatusVoz();
 
   // o zoom é compartilhado: busca o valor que está valendo no projetor
   let z = zoomAtual();
@@ -892,7 +909,7 @@ function desenharHistorico(histAsc){
     </div>` : `
     <div class="itemHist ${c.tipo === 'prioridade' ? 'pri' : ''}">
       <span class="n">${c.senha}</span>
-      ${temGuiche(c.guiche) ? `<span class="g">Guichê ${c.guiche}</span>` : ''}
+      ${temGuiche(c.guiche) ? `<span class="g">Guichê ${numGuiche(c.guiche)}</span>` : ''}
     </div>`).join('');
 }
 
@@ -923,7 +940,7 @@ function processarFila(){
     num.textContent = c.senha;
     // sem guichê: o número ocupa mais espaço, já que não há linha abaixo
     num.style.fontSize = temGuiche(c.guiche) ? '22vw' : '26vw';
-    gui.textContent = temGuiche(c.guiche) ? 'Guichê ' + c.guiche : '';
+    gui.textContent = temGuiche(c.guiche) ? 'Guichê ' + numGuiche(c.guiche) : '';
     gui.style.fontSize = '5vw';
   }
   document.getElementById('overlayChamada').classList.remove('oculto');
@@ -1061,7 +1078,11 @@ async function falarPelaInternet(partes){
     let url = cacheVoz.get(chave);
     if (!url){
       const r = await fetch(urlVoz(texto));
-      if (!r.ok) throw new Error('serviço indisponível');
+      if (!r.ok){
+        let det = 'serviço indisponível';
+        try{ const j = await r.json(); if (j.erro) det = j.erro; }catch(e2){}
+        throw new Error(det);
+      }
       const blob = await r.blob();
       if (!blob.size) throw new Error('áudio vazio');
       url = URL.createObjectURL(blob);
@@ -1100,24 +1121,103 @@ function falarPeloNavegador(partes){
 
 async function dizer(partes){
   if (vozInternetAtiva()){
-    try{ await falarPelaInternet(partes); return; }
-    catch(e){
-      marcarFonteVoz('reserva');   // avisa que caiu para a voz local
+    try{
+      await falarPelaInternet(partes);
+      if (estadoVoz.fonte !== 'ok') marcarFonteVoz('ok');   // voltou sozinha
+      return;
+    }catch(e){
+      marcarFonteVoz('reserva', String(e.message || e));    // caiu para a voz local
+      agendarReconexao();
     }
   }
   falarPeloNavegador(partes);
 }
 
-function marcarFonteVoz(estado){
+/* Enquanto estiver fora do ar, tenta reconectar em segundo plano a cada minuto */
+let timerReconexao = null;
+function agendarReconexao(){
+  const auto = localStorage.getItem('autoReconVoz') !== '0';
+  if (!auto || timerReconexao || !vozInternetAtiva()) return;
+  timerReconexao = setInterval(async () => {
+    if (!vozInternetAtiva() || estadoVoz.fonte === 'ok'){
+      clearInterval(timerReconexao); timerReconexao = null; return;
+    }
+    try{
+      const r = await fetch('/api/voz?listar&recarregar');
+      const d = await r.json();
+      if (r.ok && d.fonte !== 'reserva'){
+        cacheVoz.clear();
+        marcarFonteVoz('ok');
+        clearInterval(timerReconexao); timerReconexao = null;
+      }
+    }catch(e){ /* segue tentando */ }
+  }, 60000);
+}
+
+/* Estado da voz, compartilhado entre o painel e as configurações */
+const estadoVoz = { fonte: null, erro: null, desde: null, falhas: 0 };
+
+function marcarFonteVoz(estado, detalhe){
+  if (estado === 'reserva' && estadoVoz.fonte !== 'reserva'){
+    estadoVoz.desde = Date.now();
+    estadoVoz.falhas++;
+  }
+  if (estado === 'ok') estadoVoz.falhas = 0;
+  estadoVoz.fonte = estado || null;
+  estadoVoz.erro = detalhe || null;
+  pintarStatusVoz();
+}
+
+function pintarStatusVoz(){
+  // texto detalhado na tela de configurações
   const el = document.getElementById('statusVoz');
-  if (!el) return;
-  if (estado === 'reserva'){
-    el.textContent = '⚠️ voz da internet indisponível — usando a voz do computador';
-    el.style.color = 'var(--ambar)';
-  } else if (estado === 'ok'){
-    el.textContent = '✓ usando voz da internet';
-    el.style.color = 'var(--verde)';
-  } else el.textContent = '';
+  if (el){
+    if (estadoVoz.fonte === 'reserva'){
+      const h = estadoVoz.desde
+        ? new Date(estadoVoz.desde).toLocaleTimeString('pt-BR', {hour:'2-digit', minute:'2-digit'})
+        : '';
+      el.innerHTML = `⚠️ <b>Voz da internet fora do ar</b>${h ? ` desde ${h}` : ''} — ` +
+        'o anúncio está saindo com a voz do computador, que ignora a escolha acima.' +
+        (estadoVoz.erro ? `<br><span style="opacity:.75">Motivo: ${estadoVoz.erro}</span>` : '');
+      el.style.color = 'var(--ambar)';
+    } else if (estadoVoz.fonte === 'ok'){
+      el.textContent = '✓ voz da internet funcionando';
+      el.style.color = 'var(--verde)';
+    } else if (estadoVoz.fonte === 'navegador'){
+      el.textContent = 'Usando a voz do computador (escolha sua).';
+      el.style.color = 'var(--suave)';
+    }
+  }
+  // aviso discreto no projetor, só quando há problema
+  const badge = document.getElementById('avisoVozPainel');
+  if (badge) badge.classList.toggle('oculto', estadoVoz.fonte !== 'reserva' || !vozInternetAtiva());
+}
+
+/* Tenta restabelecer a voz da internet: recarrega a lista e faz um teste real */
+async function reconectarVoz(silencioso){
+  const st = document.getElementById('statusVoz');
+  const btn = document.getElementById('btnReconectar');
+  if (btn){ btn.disabled = true; btn.textContent = 'Reconectando…'; }
+  if (st && !silencioso){ st.textContent = 'reconectando ao serviço de voz…'; st.style.color = 'var(--suave)'; }
+
+  cacheVoz.clear();                                   // descarta áudios gerados na queda
+  let voltou = false, motivo = null;
+  try{
+    const r = await fetch('/api/voz?listar&recarregar' + (localStorage.getItem('vozMulti') === '1' ? '&multi' : ''));
+    const d = await r.json();
+    if (!r.ok) throw new Error('HTTP ' + r.status);
+    if (d.fonte === 'reserva') throw new Error(d.erro || 'serviço não respondeu');
+
+    // remonta o seletor com a lista nova e confirma gerando um áudio de verdade
+    document.getElementById('selVozNet').innerHTML = '';
+    await montarVozesInternet(true);
+    await falarPelaInternet(['Voz reconectada.']);
+    voltou = true;
+  }catch(e){ motivo = String(e.message || e); }
+
+  if (btn){ btn.disabled = false; btn.textContent = '🔄 Reconectar voz'; }
+  marcarFonteVoz(voltou ? 'ok' : 'reserva', motivo);
+  return voltou;
 }
 
 function falar(c){
@@ -1129,7 +1229,7 @@ function falar(c){
   const pri = c.tipo === 'prioridade';
   // duas partes: cada trecho fica em cache separado e serve para qualquer combinação
   const partes = [`Senha ${pri ? 'prioritária ' : ''}${c.senha}.`];
-  if (temGuiche(c.guiche)) partes.push(`Guichê ${c.guiche}.`);   // sem guichê: fala só o número
+  if (temGuiche(c.guiche)) partes.push(`Guichê ${numGuiche(c.guiche)}.`);   // sem guichê: fala só o número
   dizer(partes);
 }
 
@@ -1247,23 +1347,27 @@ const VOZES_RESERVA = [
   { id:'antonio',   nome:'Antonio',   regiao:'Brasil', feminina:false },
 ];
 
-async function montarVozesInternet(){
+async function montarVozesInternet(forcar){
   const sel = document.getElementById('selVozNet');
   const st = document.getElementById('statusVoz');
-  if (sel.options.length) return;
+  if (sel.options.length && !forcar) return;
 
   const multi = localStorage.getItem('vozMulti') === '1';
   document.getElementById('chkMulti').checked = multi;
 
-  st.textContent = 'consultando vozes disponíveis…'; st.style.color = 'var(--suave)';
-  let vozes = VOZES_RESERVA, doServico = false;
+  if (st){ st.textContent = 'consultando vozes disponíveis…'; st.style.color = 'var(--suave)'; }
+  let vozes = VOZES_RESERVA, doServico = false, motivo = null;
   try{
-    const r = await fetch('/api/voz?listar' + (multi ? '&multi' : ''));
+    const r = await fetch('/api/voz?listar' + (multi ? '&multi' : '') + (forcar ? '&recarregar' : ''));
     if (r.ok){
       const d = await r.json();
-      if (d.vozes && d.vozes.length){ vozes = d.vozes; doServico = true; }
-    }
-  }catch(e){}
+      if (d.vozes && d.vozes.length){
+        vozes = d.vozes;
+        doServico = d.fonte !== 'reserva';      // reserva = o serviço não respondeu
+        motivo = d.erro || null;
+      }
+    } else motivo = 'HTTP ' + r.status;
+  }catch(e){ motivo = String(e.message || e); }
 
   // português primeiro; depois as multilíngues, agrupadas por país
   const grupo = v => v.portugues === false
@@ -1282,15 +1386,17 @@ async function montarVozesInternet(){
 
   if (doServico){
     const pt = vozes.filter(v => v.portugues !== false).length;
-    st.textContent = multi
-      ? `✓ ${vozes.length} vozes (${pt} em português + ${vozes.length - pt} multilíngues)`
-      : `✓ ${vozes.length} vozes em português disponíveis`;
-    st.style.color = 'var(--verde)';
+    if (st){
+      st.textContent = multi
+        ? `✓ ${vozes.length} vozes (${pt} em português + ${vozes.length - pt} multilíngues)`
+        : `✓ ${vozes.length} vozes em português disponíveis`;
+      st.style.color = 'var(--verde)';
+    }
   } else {
-    st.innerHTML = '⚠️ não consegui consultar a lista de vozes. Confira se <b>api/voz.js</b> ' +
-                   'e <b>package.json</b> foram publicados.';
-    st.style.color = 'var(--ambar)';
+    // sem lista real: o serviço está fora. Registra para o indicador e o botão de reconectar.
+    marcarFonteVoz('reserva', motivo);
   }
+  return doServico;
 }
 
 function recarregarVozesNet(){
@@ -1306,11 +1412,17 @@ function aplicarFonteVoz(){
   document.getElementById('linhaVozLocal').style.display = net ? 'none' : 'flex';
   document.getElementById('chkTodasVozes').closest('.linhaCfg').style.display = net ? 'none' : 'flex';
   document.getElementById('infoVozes').style.display = net ? 'none' : 'block';
-  marcarFonteVoz('');
-  if (net) montarVozesInternet();
+  // o botão de reconectar só faz sentido com a voz da internet
+  document.getElementById('btnReconectar').closest('.linhaCfg').style.display = net ? 'flex' : 'none';
+  if (net){ marcarFonteVoz(estadoVoz.fonte === 'reserva' ? 'reserva' : null, estadoVoz.erro); montarVozesInternet(); }
+  else marcarFonteVoz('navegador');
 }
 document.getElementById('fonteNet').addEventListener('change', aplicarFonteVoz);
 document.getElementById('fonteLocal').addEventListener('change', aplicarFonteVoz);
+document.getElementById('chkAutoRecon').addEventListener('change', ev => {
+  localStorage.setItem('autoReconVoz', ev.target.checked ? '1' : '0');
+  if (ev.target.checked && estadoVoz.fonte === 'reserva') agendarReconexao();
+});
 document.getElementById('selVozNet').addEventListener('change', ev => {
   localStorage.setItem('vozInternet', ev.target.value);
   cacheVoz.clear();          // voz nova: recomeça o cache
