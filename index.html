@@ -60,6 +60,8 @@
   #btnPrioridade{background:linear-gradient(180deg,var(--ambar),var(--ambar2))}
   #btnComum{background:linear-gradient(180deg,var(--azul),var(--azul2))}
   .btnGrande:disabled{opacity:.4;cursor:not-allowed}
+  #btnAbrirTrabalho{background:linear-gradient(180deg,var(--verde),#1f7d4a);color:#fff;
+    padding:15px 26px;font-size:1rem;font-weight:700;max-width:420px;width:100%}
   #btnRepetir{background:var(--panel2);color:var(--texto);border:1px solid var(--borda);padding:12px 26px;font-size:1rem}
   #avisoAtend{min-height:22px;color:var(--vermelho);font-weight:600}
   .avisoOffline{background:#3a2410;border:1px solid var(--ambar);color:var(--ambar);
@@ -90,6 +92,50 @@
   #intMsg{background:var(--panel2);border:1px solid var(--borda);border-radius:8px;
     color:var(--texto);padding:10px 12px;font-size:.9rem;width:100%}
   #btnIntervalo{background:linear-gradient(180deg,var(--verde),#1f7d4a);color:#fff;padding:14px;font-size:1rem;font-weight:700}
+
+  /* ---------- Modo atendimento (formulário + chamada) ---------- */
+  /* altura dinâmica: no celular o teclado não empurra a barra para fora */
+  #telaTrabalho{position:fixed;inset:0;display:none;flex-direction:column;background:var(--bg)}
+  #telaTrabalho:not(.oculto){display:flex}
+  #areaForm{flex:1;min-height:0;position:relative;background:#fff}
+  #frameForm{width:100%;height:100%;border:0;display:block;background:#fff}
+  #setupForm{position:absolute;inset:0;background:var(--bg);display:flex;flex-direction:column;
+    align-items:center;justify-content:center;gap:14px;padding:28px 22px;text-align:center}
+  #setupForm h2{font-size:1.15rem;font-weight:600}
+  #setupForm p{max-width:380px}
+  #setupForm input{width:100%;max-width:400px;background:var(--panel2);border:1px solid var(--borda);
+    border-radius:10px;color:var(--texto);padding:14px;font-size:1rem}
+  #setupForm button{background:linear-gradient(180deg,var(--azul),var(--azul2));color:#fff;
+    padding:14px 28px;font-size:1rem;font-weight:700}
+  #avisoFrame{position:absolute;bottom:10px;left:10px;opacity:.92;
+    background:#3a2410;border:1px solid var(--ambar);color:var(--ambar);
+    border-radius:8px;padding:6px 11px;font-size:.72rem;font-weight:600;max-width:60%}
+
+  #barraChamada{flex-shrink:0;background:var(--panel);border-top:2px solid var(--borda);
+    display:flex;align-items:center;gap:10px;padding:10px 12px;
+    padding-bottom:calc(10px + env(safe-area-inset-bottom))}
+  #barraChamada.oculto{display:none}
+  #infoChamada{display:flex;flex-direction:column;line-height:1.1;min-width:54px;align-items:center}
+  .rotBarra{font-size:.58rem;color:var(--suave);text-transform:uppercase;letter-spacing:.06em;white-space:nowrap}
+  #senhaBarra{font-size:1.75rem;font-weight:800}
+  #senhaBarra.pri{color:var(--ambar)} #senhaBarra.com{color:var(--azul)}
+  #botoesBarra{flex:1;display:flex;gap:8px}
+  .btnBarra{flex:1;padding:15px 10px;font-size:1rem;font-weight:700;color:#fff;
+    border-radius:12px;min-height:52px}
+  .btnBarra.pri{background:linear-gradient(180deg,var(--ambar),var(--ambar2));color:#1a1a1a;flex:0 0 38%}
+  .btnBarra.com{background:linear-gradient(180deg,var(--azul),var(--azul2))}
+  .btnBarra:disabled{opacity:.4}
+  .iconeBarra{background:var(--panel2);border:1px solid var(--borda);color:var(--suave);
+    width:38px;height:38px;font-size:1rem;flex-shrink:0}
+  #bolhaChamada{position:fixed;right:14px;bottom:calc(16px + env(safe-area-inset-bottom));z-index:30;
+    width:76px;height:76px;border-radius:50%;color:#fff;font-weight:800;font-size:1rem;
+    background:linear-gradient(180deg,var(--azul),var(--azul2));
+    box-shadow:0 6px 20px rgba(0,0,0,.45);display:flex;align-items:center;justify-content:center}
+  #bolhaChamada.oculto{display:none}
+  @media (max-width:420px){
+    .btnBarra{font-size:.92rem;padding:14px 6px}
+    .iconeBarra{width:34px;height:34px}
+  }
 
   /* ---------- Painel (projetor) ---------- */
   #telaPainel{position:fixed;inset:0;background:#000;overflow:hidden}
@@ -192,6 +238,10 @@
       <span class="ic">🧑‍💼</span><b>Atendente</b>
       <span>Chamar a próxima senha prioritária ou comum a partir do guichê</span>
     </button>
+    <button class="cartao" onclick="irPara('trabalho')">
+      <span class="ic">📱</span><b>Modo atendimento</b>
+      <span>Seu formulário e o botão de chamar na mesma tela — para celular</span>
+    </button>
     <button class="cartao" onclick="irPara('painel')">
       <span class="ic">📺</span><b>Painel</b>
       <span>Tela do projetor com voz, som de aviso e slides</span>
@@ -241,6 +291,9 @@
     </button>
   </div>
 
+  <button id="btnAbrirTrabalho" onclick="irPara('trabalho')">📱 Modo atendimento (formulário + chamada)</button>
+  <button class="linkVoltar" onclick="trocarFormulario()">trocar o formulário do modo atendimento</button>
+
   <button id="btnRepetir" onclick="repetir()">🔁 Repetir última chamada</button>
 
   <div id="caixaEspecifica">
@@ -268,6 +321,48 @@
 
   <div id="avisoAtend"></div>
   <button class="linkVoltar" onclick="irPara('home')">Início</button>
+</div>
+
+<!-- ===================== MODO ATENDIMENTO (formulário + chamada) ===================== -->
+<div id="telaTrabalho" class="oculto">
+  <!-- área do formulário -->
+  <div id="areaForm">
+    <iframe id="frameForm" title="Formulário de atendimento"
+            allow="camera; microphone; geolocation; clipboard-write"></iframe>
+
+    <!-- aparece quando ainda não há formulário configurado -->
+    <div id="setupForm">
+      <h2>Formulário de atendimento</h2>
+      <p class="dica">Cole o endereço do formulário que você preenche durante o atendimento.
+         Ele abre aqui dentro, com o botão de chamar sempre visível.</p>
+      <input type="url" id="urlForm" placeholder="https://..." inputmode="url" autocomplete="off">
+      <button id="btnAbrirForm" onclick="salvarFormulario()">Abrir formulário</button>
+      <span class="dica">Fica salvo neste aparelho — da próxima vez já abre direto.</span>
+    </div>
+
+    <!-- dica discreta caso o site recuse ser embutido -->
+    <button id="avisoFrame" class="oculto" onclick="ajudaFrame()">Formulário não apareceu?</button>
+  </div>
+
+  <!-- barra de chamada: sempre visível, nunca coberta -->
+  <div id="barraChamada">
+    <div id="infoChamada">
+      <span class="rotBarra" id="rotBarra">última</span>
+      <b id="senhaBarra">—</b>
+    </div>
+    <div id="botoesBarra">
+      <button class="btnBarra pri oculto" id="barraPri" onclick="chamarDaBarra('prioridade')">Prioridade</button>
+      <button class="btnBarra com" id="barraCom" onclick="chamarDaBarra('comum')">Próxima</button>
+    </div>
+    <button class="iconeBarra" id="btnRecarregarForm" onclick="recarregarFormulario()" title="Recarregar o formulário">⟳</button>
+    <button class="iconeBarra" onclick="recolherBarra(true)" title="Recolher">▾</button>
+    <button class="iconeBarra" onclick="irPara('atendente')" title="Mais opções">⋯</button>
+  </div>
+
+  <!-- quando recolhida, vira uma bolha flutuante -->
+  <button id="bolhaChamada" class="oculto" onclick="recolherBarra(false)">
+    <span id="bolhaSenha">—</span>
+  </button>
 </div>
 
 <!-- ===================== PAINEL ===================== -->
@@ -508,7 +603,7 @@
 /* ================================================================
    NAVEGAÇÃO
 ================================================================ */
-const telas = ['home','guiche','atendente','painel','config','admin'];
+const telas = ['home','guiche','atendente','trabalho','painel','config','admin'];
 let guiche = localStorage.getItem('guiche') || '';
 let pinNecessario = false;
 
@@ -517,6 +612,10 @@ function irPara(t){
   document.getElementById('tela' + t[0].toUpperCase() + t.slice(1)).classList.remove('oculto');
   location.hash = t === 'home' ? '' : t;
   if (t === 'atendente') iniciarAtendente();
+  if (t === 'trabalho'){
+    if (!guiche){ destinoAposGuiche = 'trabalho'; return irPara('guiche'); }
+    iniciarTrabalho();
+  }
   if (t === 'painel') iniciarPainel();
   // ao ir para configurações o painel continua rodando por trás (não perde as chamadas)
   else if (t !== 'config') pararPainel();
@@ -526,6 +625,7 @@ function irPara(t){
 
 // valor reservado para atendimento que não é feito em guichê numerado
 const SEM_GUICHE = 'sem';
+let destinoAposGuiche = null;   // para onde ir depois de escolher o guichê
 // só um número conta como guichê: 'sem', '', '?', '-' e afins viram "sem guichê"
 const numGuiche = g => String(g ?? '').trim();
 const temGuiche = g => /^\d+$/.test(numGuiche(g));
@@ -535,7 +635,9 @@ const temGuiche = g => /^\d+$/.test(numGuiche(g));
   const escolher = valor => {
     guiche = String(valor);
     localStorage.setItem('guiche', guiche);
-    irPara('atendente');
+    // quem abriu o link do modo atendimento volta para lá, não para a tela cheia
+    irPara(destinoAposGuiche === 'trabalho' ? 'trabalho' : 'atendente');
+    destinoAposGuiche = null;
   };
   for (let i = 1; i <= 20; i++){
     const b = document.createElement('button');
@@ -602,12 +704,143 @@ function iniciarAtendente(){
   pollAtend = setInterval(atualizarAtendente, 4000);
 }
 
+/* ================================================================
+   MODO ATENDIMENTO — formulário embutido + barra de chamada fixa
+   Picture-in-Picture com botões não existe em navegador de celular,
+   então o caminho é o inverso: o formulário vem para dentro daqui.
+================================================================ */
+const urlFormSalva = () => localStorage.getItem('urlFormulario') || '';
+
+function iniciarTrabalho(){
+  const url = urlFormSalva();
+  const setup = document.getElementById('setupForm');
+  const frame = document.getElementById('frameForm');
+
+  if (url){
+    setup.classList.add('oculto');
+    if (frame.getAttribute('src') !== url) frame.src = url;   // não recarrega à toa
+    vigiarFrame();
+  } else {
+    setup.classList.remove('oculto');
+    document.getElementById('urlForm').value = '';
+  }
+
+  // mantém a barra em dia com a fila, como na tela de atendente
+  atualizarAtendente();
+  clearInterval(pollAtend);
+  pollAtend = setInterval(atualizarAtendente, 4000);
+}
+
+function salvarFormulario(){
+  const campo = document.getElementById('urlForm');
+  let url = campo.value.trim();
+  if (!url){ campo.focus(); return; }
+  if (!/^https?:\/\//i.test(url)) url = 'https://' + url;   // aceita colar sem o https
+  try{ new URL(url); }catch(e){ alert('Endereço inválido. Confira o link do formulário.'); return; }
+  localStorage.setItem('urlFormulario', url);
+  iniciarTrabalho();
+}
+
+function recarregarFormulario(){
+  const url = urlFormSalva();
+  if (!url) return;
+  const frame = document.getElementById('frameForm');
+  frame.src = 'about:blank';
+  setTimeout(() => { frame.src = url; vigiarFrame(); }, 50);   // volta ao formulário em branco
+}
+
+/* Sites que recusam ser embutidos ficam em branco e não avisam.
+   Depois de alguns segundos, oferecemos ajuda em vez de deixar a tela vazia. */
+let timerFrame = null, timerFrameFim = null;
+function vigiarFrame(){
+  clearTimeout(timerFrame); clearTimeout(timerFrameFim);
+  const aviso = document.getElementById('avisoFrame');
+  aviso.classList.add('oculto');
+  // não há como saber de fora se o site recusou ser embutido; então o aviso
+  // aparece discreto por alguns segundos e some sozinho se estiver tudo bem
+  timerFrame = setTimeout(() => {
+    aviso.classList.remove('oculto');
+    timerFrameFim = setTimeout(() => aviso.classList.add('oculto'), 9000);
+  }, 3500);
+}
+
+function ajudaFrame(){
+  const url = urlFormSalva();
+  const abrir = confirm(
+    'Se o formulário ficou em branco, o site dele provavelmente não permite ser aberto dentro de outra página.\n\n' +
+    'Duas saídas:\n' +
+    '• Abrir o formulário em outra aba e usar a tela dividida do celular\n' +
+    '• Trocar o endereço por uma versão que permita incorporação\n\n' +
+    'Abrir o formulário em uma nova aba agora?');
+  if (abrir && url) window.open(url, '_blank', 'noopener');
+  else trocarFormulario();
+}
+
+function trocarFormulario(){
+  const atual = urlFormSalva();
+  const novo = prompt('Endereço do formulário:', atual);
+  if (novo === null) return;
+  if (!novo.trim()){ localStorage.removeItem('urlFormulario'); document.getElementById('frameForm').src = 'about:blank'; }
+  else localStorage.setItem('urlFormulario', novo.trim());
+  iniciarTrabalho();
+}
+
+/* Barra recolhida vira bolha, para não atrapalhar campos no rodapé do formulário */
+function recolherBarra(recolher){
+  document.getElementById('barraChamada').classList.toggle('oculto', recolher);
+  document.getElementById('bolhaChamada').classList.toggle('oculto', !recolher);
+  localStorage.setItem('barraRecolhida', recolher ? '1' : '0');
+}
+
+/* Chamada feita pela barra: mesmo caminho da tela de atendente, com retorno próprio */
+async function chamarDaBarra(tipo){
+  if (chamadaEmCurso) return;
+  const r = await chamar(tipo);
+  const senha = document.getElementById('senhaBarra');
+  if (r && r.esgotado){
+    senha.textContent = 'fim';
+    alert(tipo === 'prioridade'
+      ? 'Todas as senhas prioritárias já foram chamadas.'
+      : 'Todas as senhas já foram chamadas.');
+  } else if (r && r.falhou){
+    alert('Falha de conexão. Confira se a senha foi chamada antes de chamar de novo.');
+  } else if (r && r.chamada){
+    pintarSenhaBarra(r.chamada);
+  }
+  atualizarAtendente();
+}
+
+function pintarSenhaBarra(c){
+  if (!c) return;
+  const el = document.getElementById('senhaBarra');
+  el.textContent = c.senha;
+  el.className = c.tipo === 'prioridade' ? 'pri' : 'com';
+  document.getElementById('bolhaSenha').textContent = c.senha;
+}
+
+/* Mantém a barra sincronizada com o estado vindo do servidor */
+function pintarBarraAtend(e, minha){
+  const temPri = e.config && e.config.prioridadeAtiva;
+  const restPri = e.limites.maxPrioridade - e.prioridade;
+  const restCom = e.limites.maxComum - e.comum;
+  const bPri = document.getElementById('barraPri');
+  const bCom = document.getElementById('barraCom');
+  if (!bPri) return;
+  bPri.classList.toggle('oculto', !temPri);
+  bCom.textContent = temPri ? 'Comum' : 'Próxima';
+  if (!chamadaEmCurso){
+    bPri.disabled = restPri <= 0;
+    bCom.disabled = restCom <= 0;
+  }
+  if (minha) pintarSenhaBarra(minha);
+}
+
 let chamadaEmCurso = false;   // trava contra duplo clique
 
 // bloqueia os botões de chamada por alguns instantes
 function travarBotoes(travado){
   chamadaEmCurso = travado;
-  ['btnPrioridade','btnComum','btnEspecifica'].forEach(id => {
+  ['btnPrioridade','btnComum','btnEspecifica','barraPri','barraCom'].forEach(id => {
     const b = document.getElementById(id);
     if (b) b.disabled = travado;
   });
@@ -647,6 +880,7 @@ async function atualizarAtendente(){
       e.prioridade + Math.max(e.comum - e.limites.baseComum, 0);
 
     const minha = (e.historico || []).find(c => String(c.guiche) === String(guiche) && !c.intervalo);
+    pintarBarraAtend(e, minha);          // mantém a barra do modo atendimento em dia
     if (minha){
       document.getElementById('numAtend').textContent = minha.senha;
       const tag = document.getElementById('tagAtend');
@@ -671,11 +905,14 @@ async function chamar(tipo){
       guardarLocal(r.chamada);
     }
     marcarConexao(true);
+    setTimeout(() => travarBotoes(false), 2000);   // 2 s de trava
+    return r;
   }catch(err){
     aviso.textContent = 'Falha de conexão. Verifique se a senha foi chamada antes de repetir.';
     marcarConexao(false);
+    setTimeout(() => travarBotoes(false), 2000);
+    return { falhou: true };
   }
-  setTimeout(() => travarBotoes(false), 2000);   // 2 s de trava
 }
 
 async function chamarEspecifica(){
@@ -1870,7 +2107,7 @@ async function resetar(){
 /* ---- Rota inicial por hash ---- */
 (function(){
   const h = location.hash.replace('#','');
-  if (h === 'atendente' && !guiche) irPara('guiche');
+  if ((h === 'atendente' || h === 'trabalho') && !guiche){ destinoAposGuiche = h; irPara('guiche'); }
   else if (telas.includes(h)) irPara(h);
 })();
 if ('speechSynthesis' in window) speechSynthesis.getVoices();
